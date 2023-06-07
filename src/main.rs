@@ -26,7 +26,7 @@ fn run() -> error::Result<()> {
 
     action::run(&ctx, &cli.action)?;
 
-    fs::write(".punch_clock/record", ctx.record.borrow().to_string())?;
+    fs::write(".punch_clock/record", ctx.record.borrow().serialize()?)?;
     
     Ok(())
 }

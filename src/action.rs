@@ -12,13 +12,7 @@ pub fn run(ctx: &context::Base, action: &Action) -> Result<()> {
     match action {
         Action::In => enter::run(ctx),
         Action::Out => exit::run(ctx),
-        Action::Status => {
-            status::run(ctx);
-            Ok(())
-        }
-        Action::Dump => {
-            dump::run(ctx);
-            Ok(())
-        }
+        Action::Status => status::run(ctx),
+        Action::Dump => dump::run(ctx),
     }
 }

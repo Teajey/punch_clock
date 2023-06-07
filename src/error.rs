@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use chrono::{DateTime, Duration, Local};
+use chrono::Duration;
 
 #[derive(Debug)]
 pub struct Ago(pub chrono::Duration);
@@ -48,21 +48,27 @@ pub enum Main {
     #[error("Punch Clock is not initialized")]
     Uninitialized,
 
-    #[error("Record has an invalid entry")]
-    InvalidEntry,
+    #[error("There was an attempt to create an entry with check-out before check-in.")]
+    CheckOutBeforeCheckIn,
 
-    #[error("Invalid event string: {0}")]
-    InvalidEventString(String),
+    #[error("An entry has an invalid number of tokens")]
+    EntryIncorrectNumberOfTokens,
 
-    #[error("The previous entry is in the future! ({0}, {1})")]
-    LastEntryInFuture(DateTime<Local>, Ago),
+    #[error("Not currently clocked-in.")]
+    NotClockedIn,
 
-    #[error("Already checked in since {0} ({1})")]
-    AlreadyCheckedIn(DateTime<Local>, Ago),
+    #[error("Already clocked-in.")]
+    AlreadyClockedIn,
 
-    #[error("Already checked out since {0} ({1})")]
-    AlreadyCheckedOut(DateTime<Local>, Ago),
+    #[error("Failed to parse an integer: {0}")]
+    ParseInt(#[from] std::num::ParseIntError),
 
-    #[error("First entry must be 'enter'")]
-    ExitingFirst,
+    #[error("Failed to convert an integer: {0}")]
+    TryFromInt(#[from] std::num::TryFromIntError),
+
+    #[error("An entry was so long that it overflowed")]
+    DateTimeOverflow,
+
+    #[error("Formatting error: {0}")]
+    Format(#[from] std::fmt::Error),
 }

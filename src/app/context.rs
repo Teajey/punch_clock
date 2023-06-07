@@ -1,83 +1,170 @@
-use std::{cell::RefCell, fmt::Display, fs};
+use std::{cell::RefCell, fmt::Write, fs};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use crate::error::{self, Result};
 
-pub enum Event {
-    In,
-    Out,
-}
-
-impl Display for Event {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Event::In => write!(f, "in"),
-            Event::Out => write!(f, "out"),
-        }
-    }
-}
-
-impl TryFrom<&str> for Event {
-    type Error = error::Main;
-
-    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        let event = match value {
-            "in" => Self::In,
-            "out" => Self::Out,
-            invalid => return Err(error::Main::InvalidEventString(invalid.to_owned())),
-        };
-
-        Ok(event)
-    }
-}
-
 pub struct Entry {
-    pub date: DateTime<Utc>,
-    pub event: Event,
+    pub check_in: DateTime<Utc>,
+    work_time_millis: u32,
 }
 
 impl Entry {
-    pub fn new(event: Event) -> Self {
-        Self {
-            date: Utc::now(),
-            event,
+    pub fn try_new(check_in: DateTime<Utc>, check_out: DateTime<Utc>) -> Result<Self> {
+        if check_out < check_in {
+            return Err(error::Main::CheckOutBeforeCheckIn);
         }
+
+        let work_time_millis = check_out
+            .signed_duration_since(check_in)
+            .num_milliseconds()
+            .try_into()?;
+
+        Ok(Self {
+            check_in,
+            work_time_millis,
+        })
+    }
+
+    fn from_tokens(check_in: &str, check_out: &str) -> Result<Self> {
+        let check_in = DateTime::parse_from_rfc3339(check_in)?.with_timezone(&Utc);
+        let check_out = DateTime::parse_from_rfc3339(check_out)?.with_timezone(&Utc);
+
+        Self::try_new(check_in, check_out)
+    }
+
+    fn get_work_time(&self) -> Duration {
+        Duration::milliseconds(self.work_time_millis.into())
+    }
+
+    pub fn get_check_out(&self) -> Result<DateTime<Utc>> {
+        self.check_in
+            .checked_add_signed(self.get_work_time())
+            .ok_or_else(|| error::Main::DateTimeOverflow)
     }
 }
 
-pub struct Record(pub Vec<Entry>);
+impl TryFrom<&str> for Entry {
+    type Error = error::Main;
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        let [check_in, check_out_millis] = value.split(' ').collect::<Vec<_>>()[..] else {
+            return Err(error::Main::EntryIncorrectNumberOfTokens);
+        };
+
+        Self::from_tokens(check_in, check_out_millis)
+    }
+}
+
+pub enum RecordLatest<'a> {
+    Entry(&'a Entry),
+    Current(&'a DateTime<Utc>),
+    None,
+}
+
+pub struct Record {
+    entries: Vec<Entry>,
+    current_session: Option<DateTime<Utc>>,
+}
+
+impl Record {
+    pub fn get_current_session(&self) -> Option<&DateTime<Utc>> {
+        self.current_session.as_ref()
+    }
+
+    pub fn get_entries(&self) -> &[Entry] {
+        &self.entries
+    }
+
+    pub fn get_latest(&self) -> RecordLatest<'_> {
+        match (&self.current_session, self.entries.last()) {
+            (None, None) => RecordLatest::None,
+            (None, Some(last_entry)) => RecordLatest::Entry(last_entry),
+            (Some(current_session), _) => RecordLatest::Current(current_session),
+        }
+    }
+
+    pub fn clock_in(&mut self) -> Result<()> {
+        if self.current_session.is_some() {
+            return Err(error::Main::AlreadyClockedIn);
+        };
+
+        self.current_session = Some(Utc::now());
+
+        Ok(())
+    }
+
+    pub fn clock_out(&mut self) -> Result<()> {
+        let Some(current_session) = self.current_session else {
+            return Err(error::Main::NotClockedIn);
+        };
+
+        self.entries
+            .push(Entry::try_new(current_session, Utc::now())?);
+
+        self.current_session = None;
+
+        Ok(())
+    }
+}
 
 impl TryFrom<&str> for Record {
     type Error = error::Main;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let record = value
+        let mut current_session = None;
+
+        let mut lines = value
             .split('\n')
             .filter(|entry| !entry.is_empty())
-            .map(|entry| {
-                let [date, event] = entry.split(' ').collect::<Vec<_>>()[..] else {
-                    return Err(error::Main::InvalidEntry);
-                };
+            .collect::<Vec<_>>();
 
-                let date = DateTime::parse_from_rfc3339(date)?.with_timezone(&Utc);
-                let event = Event::try_from(event)?;
+        let last_line = lines.pop();
 
-                Ok(Entry { date, event })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut entries = lines
+            .into_iter()
+            .map(Entry::try_from)
+            .collect::<Result<Vec<_>>>()?;
 
-        Ok(Record(record))
+        if let Some(last_line) = last_line {
+            match last_line.split(' ').collect::<Vec<_>>()[..] {
+                [check_in, check_out_millis] => {
+                    entries.push(Entry::from_tokens(check_in, check_out_millis)?);
+                }
+                [check_in] => {
+                    current_session =
+                        Some(DateTime::parse_from_rfc3339(check_in)?.with_timezone(&Utc));
+                }
+                _ => {
+                    return Err(error::Main::EntryIncorrectNumberOfTokens);
+                }
+            }
+        }
+
+        Ok(Self {
+            entries,
+            current_session,
+        })
     }
 }
 
-impl Display for Record {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for Entry { date, event } in &self.0 {
-            writeln!(f, "{} {}", date.to_rfc3339(), event)?;
+impl Record {
+    pub fn serialize(&self) -> Result<String> {
+        let mut buf = String::new();
+        for entry in &self.entries {
+            writeln!(
+                buf,
+                "{} {}",
+                entry.check_in.to_rfc3339(),
+                entry.get_check_out()?.to_rfc3339(),
+            )?;
         }
 
-        Ok(())
+        if let Some(current_session) = self.current_session {
+            writeln!(buf, "{}", current_session.to_rfc3339())?;
+        }
+
+        Ok(buf)
     }
 }
 

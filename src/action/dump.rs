@@ -2,10 +2,11 @@ use chrono::Local;
 
 use crate::{app::context, error::Result};
 
-pub fn run(ctx: &context::Base) -> Result<()> {
-    let record = ctx.record.borrow();
+const DATE_FORMAT: &str = "%e %b %Y %I:%M%P %Z";
+
+pub fn run(record: &context::Record) -> Result<()> {
     println!("| {:<40} | {:<40} |", "Check-in", "Check-out");
-    for _ in 0..69 {
+    for _ in 0..89 {
         print!("=");
     }
     println!();
@@ -14,8 +15,8 @@ pub fn run(ctx: &context::Base) -> Result<()> {
         let local_check_out_date = entry.get_check_out()?.with_timezone(&Local);
         println!(
             "| {:<40} | {:<40} |",
-            local_check_in_date.format("%e %b %Y %r %Z"),
-            local_check_out_date.format("%e %b %Y %r %Z"),
+            local_check_in_date.format(DATE_FORMAT),
+            local_check_out_date.format(DATE_FORMAT),
         );
     }
 
@@ -23,7 +24,7 @@ pub fn run(ctx: &context::Base) -> Result<()> {
         let local_current_session_date = current_session.with_timezone(&Local);
         println!(
             "| {:<40} | {:<40} |",
-            local_current_session_date.format("%e %b %Y %r %Z"),
+            local_current_session_date.format(DATE_FORMAT),
             "-",
         );
     }

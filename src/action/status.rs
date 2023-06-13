@@ -5,8 +5,8 @@ use crate::{
     error::{Ago, Result},
 };
 
-pub fn run(ctx: &context::Base) -> Result<()> {
-    match ctx.record.borrow().get_latest() {
+pub fn run(record: &context::Record) -> Result<()> {
+    match record.get_latest() {
         RecordLatest::Current(current_session) => {
             let since = current_session.signed_duration_since(Utc::now());
             let ago = Ago(since);

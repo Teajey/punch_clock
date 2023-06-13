@@ -1,8 +1,6 @@
 use crate::{app::context, error::Result};
 
-pub fn run(ctx: &context::Base) -> Result<()> {
-    let mut record = ctx.record.borrow_mut();
-
+pub fn run(record: &mut context::Record) -> Result<()> {
     record.clock_out()?;
 
     Ok(())

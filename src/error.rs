@@ -71,4 +71,10 @@ pub enum Main {
 
     #[error("Formatting error: {0}")]
     Format(#[from] std::fmt::Error),
+
+    #[error("Please set the path of your default editor using the $EDITOR environment variable")]
+    MissingEditorPath,
+
+    #[error("The editor subprocess exited unsuccessfully.")]
+    UnsuccessfulEditor,
 }

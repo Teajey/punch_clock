@@ -5,6 +5,7 @@ mod error;
 use std::fs;
 
 use clap::Parser;
+use chrono::Utc;
 
 fn main() {
     if let Err(err) = run() {
@@ -17,16 +18,18 @@ fn run() -> error::Result<()> {
     let cli = app::cli::Base::parse();
 
     if cli.init {
-        app::context::init()?;
+        app::context::Record::init()?;
     }
 
-    let Some(ctx) = app::context::load()? else {
+    let Some(record) = app::context::Record::load()? else {
         return Err(error::Main::Uninitialized);  
     };
 
-    action::run(&ctx, &cli.action)?;
+    let ctx = app::context::load()?;
 
-    fs::write(".punch_clock/record", ctx.record.borrow().serialize()?)?;
+    let record = action::run(&ctx, &cli.action, record)?;
+
+    fs::write(".punch_clock/record", record.serialize(&Utc)?)?;
     
     Ok(())
 }

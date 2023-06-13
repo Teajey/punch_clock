@@ -1,6 +1,9 @@
-use std::{cell::RefCell, fmt::Write, fs};
+use std::{
+    fmt::{Display, Write},
+    fs,
+};
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 
 use crate::error::{self, Result};
 
@@ -48,11 +51,11 @@ impl TryFrom<&str> for Entry {
     type Error = error::Main;
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        let [check_in, check_out_millis] = value.split(' ').collect::<Vec<_>>()[..] else {
+        let [check_in, check_out] = value.split(' ').collect::<Vec<_>>()[..] else {
             return Err(error::Main::EntryIncorrectNumberOfTokens);
         };
 
-        Self::from_tokens(check_in, check_out_millis)
+        Self::from_tokens(check_in, check_out)
     }
 }
 
@@ -106,6 +109,55 @@ impl Record {
 
         Ok(())
     }
+
+    pub fn serialize<Tz>(&self, timezone: &Tz) -> Result<String>
+    where
+        Tz: TimeZone,
+        Tz::Offset: Display,
+    {
+        let mut buf = String::new();
+        for entry in &self.entries {
+            writeln!(
+                buf,
+                "{} {}",
+                entry.check_in.with_timezone(timezone).to_rfc3339(),
+                entry.get_check_out()?.with_timezone(timezone).to_rfc3339(),
+            )?;
+        }
+
+        if let Some(current_session) = self.current_session {
+            writeln!(
+                buf,
+                "{}",
+                current_session.with_timezone(timezone).to_rfc3339()
+            )?;
+        }
+
+        Ok(buf)
+    }
+
+    pub fn init() -> Result<()> {
+        if Self::load()?.is_some() {
+            return Err(error::Main::AlreadyInitialized);
+        }
+
+        fs::create_dir(".punch_clock")?;
+        fs::write(".punch_clock/record", "")?;
+
+        Ok(())
+    }
+
+    pub fn load() -> Result<Option<Self>> {
+        if !std::path::Path::new(".punch_clock").exists() {
+            return Ok(None);
+        }
+
+        let record = fs::read_to_string(".punch_clock/record")?
+            .as_str()
+            .try_into()?;
+
+        Ok(Some(record))
+    }
 }
 
 impl TryFrom<&str> for Record {
@@ -128,8 +180,8 @@ impl TryFrom<&str> for Record {
 
         if let Some(last_line) = last_line {
             match last_line.split(' ').collect::<Vec<_>>()[..] {
-                [check_in, check_out_millis] => {
-                    entries.push(Entry::from_tokens(check_in, check_out_millis)?);
+                [check_in, check_out] => {
+                    entries.push(Entry::from_tokens(check_in, check_out)?);
                 }
                 [check_in] => {
                     current_session =
@@ -148,51 +200,12 @@ impl TryFrom<&str> for Record {
     }
 }
 
-impl Record {
-    pub fn serialize(&self) -> Result<String> {
-        let mut buf = String::new();
-        for entry in &self.entries {
-            writeln!(
-                buf,
-                "{} {}",
-                entry.check_in.to_rfc3339(),
-                entry.get_check_out()?.to_rfc3339(),
-            )?;
-        }
-
-        if let Some(current_session) = self.current_session {
-            writeln!(buf, "{}", current_session.to_rfc3339())?;
-        }
-
-        Ok(buf)
-    }
-}
-
 pub struct Base {
-    pub record: RefCell<Record>,
+    pub editor_path: String,
 }
 
-pub fn init() -> Result<()> {
-    if load()?.is_some() {
-        return Err(error::Main::AlreadyInitialized);
-    }
+pub fn load() -> Result<Base> {
+    let editor_path = std::env::var("EDITOR").map_err(|_| error::Main::MissingEditorPath)?;
 
-    fs::create_dir(".punch_clock")?;
-    fs::write(".punch_clock/record", "")?;
-
-    Ok(())
-}
-
-pub fn load() -> Result<Option<Base>> {
-    if !std::path::Path::new(".punch_clock").exists() {
-        return Ok(None);
-    }
-
-    let record: Record = fs::read_to_string(".punch_clock/record")?
-        .as_str()
-        .try_into()?;
-
-    Ok(Some(Base {
-        record: RefCell::new(record),
-    }))
+    Ok(Base { editor_path })
 }

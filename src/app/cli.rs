@@ -15,4 +15,5 @@ pub enum Action {
     Out,
     Status,
     Dump,
+    Edit,
 }

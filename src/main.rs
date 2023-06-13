@@ -1,6 +1,7 @@
 mod action;
 mod app;
 mod error;
+mod record;
 
 use std::fs;
 
@@ -18,10 +19,10 @@ fn run() -> error::Result<()> {
     let cli = app::cli::Base::parse();
 
     if cli.init {
-        app::context::Record::init()?;
+        record::Record::init()?;
     }
 
-    let Some(record) = app::context::Record::load()? else {
+    let Some(record) = record::Record::load()? else {
         return Err(error::Main::Uninitialized);  
     };
 

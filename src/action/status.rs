@@ -1,19 +1,19 @@
 use chrono::Utc;
 
 use crate::{
-    app::context::{self, RecordLatest},
     error::{Ago, Result},
+    record::{Latest, Record},
 };
 
-pub fn run(record: &context::Record) -> Result<()> {
+pub fn run(record: &Record) -> Result<()> {
     match record.get_latest() {
-        RecordLatest::Current(current_session) => {
+        Latest::Current(current_session) => {
             let since = current_session.signed_duration_since(Utc::now());
             let ago = Ago(since);
 
             println!("Currently clocked in ({ago})");
         }
-        RecordLatest::Entry(last_entry) => {
+        Latest::Entry(last_entry) => {
             let since = last_entry
                 .get_check_out()?
                 .signed_duration_since(Utc::now());
@@ -21,7 +21,7 @@ pub fn run(record: &context::Record) -> Result<()> {
 
             println!("Currently clocked out ({ago})");
         }
-        RecordLatest::None => println!("No clock in/out records have been created."),
+        Latest::None => println!("No clock in/out records have been created."),
     };
 
     Ok(())

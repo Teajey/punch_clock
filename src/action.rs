@@ -7,13 +7,10 @@ mod status;
 use crate::{
     app::{cli::Action, context},
     error::Result,
+    record::Record,
 };
 
-pub fn run(
-    ctx: &context::Base,
-    action: &Action,
-    mut record: context::Record,
-) -> Result<context::Record> {
+pub fn run(ctx: &context::Base, action: &Action, mut record: Record) -> Result<Record> {
     match action {
         Action::In => enter::run(&mut record)?,
         Action::Out => exit::run(&mut record)?,

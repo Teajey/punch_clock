@@ -1,6 +1,6 @@
-use crate::{app::context, error::Result};
+use crate::{error::Result, record::Record};
 
-pub fn run(record: &mut context::Record) -> Result<()> {
+pub fn run(record: &mut Record) -> Result<()> {
     record.clock_out()?;
 
     Ok(())

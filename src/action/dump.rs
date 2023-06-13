@@ -1,10 +1,10 @@
 use chrono::Local;
 
-use crate::{app::context, error::Result};
+use crate::{error::Result, record::Record};
 
 const DATE_FORMAT: &str = "%e %b %Y %I:%M%P %Z";
 
-pub fn run(record: &context::Record) -> Result<()> {
+pub fn run(record: &Record) -> Result<()> {
     println!("| {:<40} | {:<40} |", "Check-in", "Check-out");
     for _ in 0..89 {
         print!("=");

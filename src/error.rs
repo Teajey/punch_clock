@@ -1,37 +1,3 @@
-use std::fmt::Display;
-
-use chrono::Duration;
-
-#[derive(Debug)]
-pub struct Ago(pub chrono::Duration);
-
-impl Display for Ago {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let days = self.0.num_days().abs();
-        let hours = self.0.num_hours().abs();
-        let minutes = self.0.num_minutes().abs();
-
-        if days > 0 {
-            write!(
-                f,
-                "{days} days, {} hours, {} minutes",
-                hours % 24,
-                minutes % 60
-            )?;
-        } else if hours > 0 {
-            write!(f, "{} hours, {} minutes", hours % 24, minutes % 60)?;
-        } else {
-            write!(f, "{} minutes", minutes % 60)?;
-        }
-
-        if self.0 < Duration::zero() {
-            write!(f, " ago")
-        } else {
-            write!(f, " from now")
-        }
-    }
-}
-
 pub type Result<T, E = Main> = std::result::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]

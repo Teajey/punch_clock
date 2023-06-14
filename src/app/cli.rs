@@ -16,4 +16,5 @@ pub enum Action {
     Status,
     Dump,
     Edit,
+    Stats,
 }

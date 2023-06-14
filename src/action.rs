@@ -2,6 +2,7 @@ mod dump;
 mod edit;
 mod enter;
 mod exit;
+mod stats;
 mod status;
 
 use crate::{
@@ -17,6 +18,7 @@ pub fn run(ctx: &context::Base, action: &Action, mut record: Record) -> Result<R
         Action::Status => status::run(&record)?,
         Action::Dump => dump::run(&record)?,
         Action::Edit => return edit::run(ctx, &record),
+        Action::Stats => stats::run(record.clone())?,
     };
 
     Ok(record)

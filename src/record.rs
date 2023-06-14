@@ -7,6 +7,7 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 
 use crate::error::{self, Result};
 
+#[derive(Clone)]
 pub struct Entry {
     pub check_in: DateTime<Utc>,
     work_time_millis: u32,
@@ -45,6 +46,13 @@ impl Entry {
             .checked_add_signed(self.get_work_time())
             .ok_or_else(|| error::Main::DateTimeOverflow)
     }
+
+    fn to_date_pair(self) -> (DateTime<Utc>, DateTime<Utc>) {
+        let check_in = self.check_in;
+        let check_out = self.check_in + self.get_work_time();
+
+        (check_in, check_out)
+    }
 }
 
 impl TryFrom<&str> for Entry {
@@ -65,6 +73,7 @@ pub enum Latest<'a> {
     None,
 }
 
+#[derive(Clone)]
 pub struct Record {
     entries: Vec<Entry>,
     current_session: Option<DateTime<Utc>>,
@@ -157,6 +166,26 @@ impl Record {
             .try_into()?;
 
         Ok(Some(record))
+    }
+
+    fn to_vec(self) -> Result<Vec<Entry>> {
+        let mut entries = self.entries;
+        if let Some(current_session) = self.current_session {
+            entries.push(Entry::try_new(current_session, Utc::now())?);
+        }
+        Ok(entries)
+    }
+
+    pub fn total_time(self) -> Result<Duration> {
+        let seconds = self
+            .to_vec()?
+            .into_iter()
+            .map(Entry::to_date_pair)
+            .map(|(check_in, check_out)| check_out.signed_duration_since(check_in))
+            .map(|duration| duration.num_seconds())
+            .sum::<i64>();
+
+        Ok(Duration::seconds(seconds))
     }
 }
 

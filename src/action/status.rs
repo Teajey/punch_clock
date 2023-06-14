@@ -1,8 +1,9 @@
 use chrono::Utc;
 
 use crate::{
-    error::{Ago, Result},
+    error::Result,
     record::{Latest, Record},
+    time::Ago,
 };
 
 pub fn run(record: &Record) -> Result<()> {

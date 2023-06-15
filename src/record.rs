@@ -3,7 +3,7 @@ use std::{
     fs,
 };
 
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveTime, TimeZone, Utc};
 
 use crate::error::{self, Result};
 
@@ -47,7 +47,7 @@ impl Entry {
             .ok_or_else(|| error::Main::DateTimeOverflow)
     }
 
-    fn to_date_pair(self) -> (DateTime<Utc>, DateTime<Utc>) {
+    fn into_date_pair(self) -> (DateTime<Utc>, DateTime<Utc>) {
         let check_in = self.check_in;
         let check_out = self.check_in + self.get_work_time();
 
@@ -168,7 +168,7 @@ impl Record {
         Ok(Some(record))
     }
 
-    fn to_vec(self) -> Result<Vec<Entry>> {
+    fn into_vec(self) -> Result<Vec<Entry>> {
         let mut entries = self.entries;
         if let Some(current_session) = self.current_session {
             entries.push(Entry::try_new(current_session, Utc::now())?);
@@ -176,16 +176,50 @@ impl Record {
         Ok(entries)
     }
 
-    pub fn total_time(self) -> Result<Duration> {
-        let seconds = self
-            .to_vec()?
+    pub fn todays_time(self) -> Result<Duration> {
+        let now = Utc::now();
+        let today = now.date_naive();
+        let mut date_pairs_today = self
+            .into_vec()?
             .into_iter()
-            .map(Entry::to_date_pair)
+            .rev()
+            .map(Entry::into_date_pair)
+            .take_while(|(_, check_out)| check_out.date_naive() == today)
+            .collect::<Vec<_>>();
+
+        let Some((first_check_in, first_check_out)) = date_pairs_today.pop() else {
+            return Ok(Duration::zero());
+        };
+
+        let first_check_in = if first_check_in.date_naive() == today {
+            first_check_in
+        } else {
+            today.and_time(NaiveTime::default()).and_utc()
+        };
+
+        date_pairs_today.push((first_check_in, first_check_out));
+
+        Ok(Self::sum_datetime_pairs(date_pairs_today))
+    }
+
+    fn sum_datetime_pairs(pairs: Vec<(DateTime<Utc>, DateTime<Utc>)>) -> Duration {
+        let seconds = pairs
+            .into_iter()
             .map(|(check_in, check_out)| check_out.signed_duration_since(check_in))
             .map(|duration| duration.num_seconds())
             .sum::<i64>();
 
-        Ok(Duration::seconds(seconds))
+        Duration::seconds(seconds)
+    }
+
+    pub fn total_time(self) -> Result<Duration> {
+        let datetime_pairs = self
+            .into_vec()?
+            .into_iter()
+            .map(Entry::into_date_pair)
+            .collect::<Vec<_>>();
+
+        Ok(Self::sum_datetime_pairs(datetime_pairs))
     }
 }
 

@@ -6,7 +6,7 @@ use crate::{
     time::Ago,
 };
 
-pub fn run(record: &Record) -> Result<()> {
+pub fn run(record: &Record<Utc>) -> Result<()> {
     match record.get_latest() {
         Latest::Current(current_session) => {
             let since = current_session.signed_duration_since(Utc::now());

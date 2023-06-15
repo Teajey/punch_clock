@@ -1,6 +1,6 @@
 use std::fs;
 
-use chrono::Local;
+use chrono::{Local, Utc};
 
 use crate::{
     app::context,
@@ -8,8 +8,8 @@ use crate::{
     record::Record,
 };
 
-pub fn run(ctx: &context::Base, record: &Record) -> Result<Record> {
-    let record_string = record.serialize(&Local)?;
+pub fn run(ctx: &context::Base, record: Record<Utc>) -> Result<Record<Utc>> {
+    let record_string = record.with_timezone(&Local).serialize()?;
     let edit_path = ".punch_clock/EDIT_RECORD";
 
     fs::write(edit_path, record_string)?;
@@ -24,5 +24,5 @@ pub fn run(ctx: &context::Base, record: &Record) -> Result<Record> {
 
     let edited_record_string = fs::read_to_string(edit_path)?;
 
-    Record::try_from(edited_record_string.as_str())
+    Ok(Record::try_from(edited_record_string.as_str())?.with_timezone(&Utc))
 }

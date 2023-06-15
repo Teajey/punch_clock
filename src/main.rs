@@ -4,8 +4,6 @@ mod app;
 mod error;
 mod record;
 
-use std::fs;
-
 use clap::Parser;
 use chrono::Utc;
 
@@ -23,15 +21,13 @@ fn run() -> error::Result<()> {
         record::Record::init()?;
     }
 
-    let Some(record) = record::Record::load()? else {
+    let Some(record) = record::Record::<Utc>::load()? else {
         return Err(error::Main::Uninitialized);  
     };
 
     let ctx = app::context::load()?;
 
-    let record = action::run(&ctx, &cli.action, record)?;
+    action::run(&ctx, &cli.action, record)?;
 
-    fs::write(".punch_clock/record", record.serialize(&Utc)?)?;
-    
     Ok(())
 }

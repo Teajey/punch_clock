@@ -43,4 +43,10 @@ pub enum Main {
 
     #[error("The editor subprocess exited unsuccessfully.")]
     UnsuccessfulEditor,
+
+    #[error("Failed to parse os string as utf-8: {0:?}")]
+    OsStringParseFail(std::ffi::OsString),
+
+    #[error("Did not find file in path by prefix: {0}")]
+    NoPrefixInPath(String),
 }

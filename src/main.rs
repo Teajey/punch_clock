@@ -1,4 +1,5 @@
 mod action;
+mod fs;
 mod time;
 mod app;
 mod error;
@@ -17,6 +18,8 @@ fn main() {
 fn run() -> error::Result<()> {
     let cli = app::cli::Base::parse();
 
+    let ctx = app::context::init()?;
+
     if cli.init {
         record::Record::init()?;
     }
@@ -24,8 +27,6 @@ fn run() -> error::Result<()> {
     let Some(record) = record::Record::<Utc>::load()? else {
         return Err(error::Main::Uninitialized);  
     };
-
-    let ctx = app::context::load()?;
 
     action::run(&ctx, &cli.action, record)?;
 

@@ -68,11 +68,18 @@ impl Entry<FixedOffset> {
     }
 }
 
+fn split_sparse_tokens(line: &str, pat: char) -> Vec<&str> {
+    line.split(pat)
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .collect()
+}
+
 impl TryFrom<&str> for Entry<FixedOffset> {
     type Error = error::Main;
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        let [check_in, check_out] = value.split(' ').collect::<Vec<_>>()[..] else {
+        let [check_in, check_out] = split_sparse_tokens(value, ' ')[..] else {
             return Err(error::Main::EntryIncorrectNumberOfTokens);
         };
 
@@ -132,7 +139,7 @@ impl<Tz: TimeZone> Record<Tz> {
         for entry in &self.entries {
             writeln!(
                 buf,
-                "{} {}",
+                "{:<32} {:<32}",
                 entry.check_in.to_rfc3339(),
                 entry.get_check_out()?.to_rfc3339(),
             )?;
@@ -264,10 +271,7 @@ impl TryFrom<&str> for Record<FixedOffset> {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut current_session = None;
 
-        let mut lines = value
-            .split('\n')
-            .filter(|entry| !entry.is_empty())
-            .collect::<Vec<_>>();
+        let mut lines = split_sparse_tokens(value, '\n');
 
         let last_line = lines.pop();
 
@@ -277,7 +281,7 @@ impl TryFrom<&str> for Record<FixedOffset> {
             .collect::<Result<Vec<_>>>()?;
 
         if let Some(last_line) = last_line {
-            match last_line.split(' ').collect::<Vec<_>>()[..] {
+            match split_sparse_tokens(last_line, ' ')[..] {
                 [check_in, check_out] => {
                     entries.push(Entry::from_tokens(check_in, check_out)?);
                 }

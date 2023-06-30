@@ -163,25 +163,68 @@ impl<Tz: TimeZone> Record<Tz> {
     }
 }
 
-impl Record<Local> {
-    fn into_vec(self) -> Result<Vec<Entry<Local>>> {
-        let mut entries = self.entries;
-        if let Some(current_session) = self.current_session {
-            entries.push(Entry::try_new(current_session, Local::now())?);
-        }
-        Ok(entries)
-    }
+pub struct LocalIterator {
+    entries: std::iter::Rev<std::vec::IntoIter<Entry<Local>>>,
+    current_session: std::option::IntoIter<DateTime<Local>>,
+}
 
+impl LocalIterator {
+    fn current_session_into_entry(&mut self) -> Option<Result<Entry<Local>>> {
+        self.current_session
+            .next()
+            .map(|current_session| Entry::try_new(current_session, Local::now()))
+    }
+}
+
+impl Iterator for LocalIterator {
+    type Item = Result<Entry<Local>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(entry) = self.entries.next() {
+            Some(Ok(entry))
+        } else {
+            self.current_session_into_entry()
+        }
+    }
+}
+
+impl DoubleEndedIterator for LocalIterator {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if let Some(current_session) = self.current_session_into_entry() {
+            Some(current_session)
+        } else {
+            self.entries.next_back().map(Ok)
+        }
+    }
+}
+
+impl IntoIterator for Record<Local> {
+    type Item = Result<Entry<Local>>;
+
+    type IntoIter = LocalIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Self::IntoIter {
+            entries: self.entries.into_iter().rev(),
+            current_session: self.current_session.into_iter(),
+        }
+    }
+}
+
+impl Record<Local> {
     pub fn todays_time(self) -> Result<Duration> {
         let now = Local::now();
         let today = now.date_naive();
         let mut date_pairs_today = self
-            .into_vec()?
             .into_iter()
             .rev()
-            .map(Entry::into_date_pair)
-            .take_while(|(_, check_out)| check_out.date_naive() == today)
-            .collect::<Vec<_>>();
+            .map(|entry_result| entry_result.map(Entry::into_date_pair))
+            .take_while(|entry| {
+                entry
+                    .iter()
+                    .any(|(check_in, _)| check_in.date_naive() == today)
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let Some((first_check_in, first_check_out)) = date_pairs_today.pop() else {
             return Ok(Duration::zero());
@@ -194,7 +237,9 @@ impl Record<Local> {
                 .and_time(NaiveTime::default())
                 .and_local_timezone(Local)
             {
-                chrono::LocalResult::None | chrono::LocalResult::Ambiguous(_, _) => todo!(),
+                chrono::LocalResult::None | chrono::LocalResult::Ambiguous(_, _) => {
+                    panic!("If you see this error, send this to the developer: {today:?}")
+                }
                 chrono::LocalResult::Single(dt) => dt,
             }
         };
@@ -206,10 +251,9 @@ impl Record<Local> {
 
     pub fn total_time(self) -> Result<Duration> {
         let datetime_pairs = self
-            .into_vec()?
             .into_iter()
-            .map(Entry::into_date_pair)
-            .collect::<Vec<_>>();
+            .map(|entry_result| entry_result.map(Entry::into_date_pair))
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(Self::sum_datetime_pairs(datetime_pairs))
     }

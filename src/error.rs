@@ -49,4 +49,7 @@ pub enum Main {
 
     #[error("Did not find file in path by prefix: {0}")]
     NoPrefixInPath(String),
+
+    #[error("Asked for an out-of-bounds timezone offset: {0}")]
+    TimezoneOutOfRange(i32),
 }

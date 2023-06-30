@@ -7,11 +7,11 @@ mod status;
 
 use std::fs;
 
-use chrono::{Local, Utc};
+use chrono::{FixedOffset, Local, Utc};
 
 use crate::{
     app::{cli::Action, context},
-    error::Result,
+    error::{self, Result},
     record::Record,
 };
 
@@ -26,7 +26,16 @@ pub fn run(ctx: &context::Base, action: &Action, mut record: Record<Utc>) -> Res
             fs::write(".punch_clock/record", record.serialize()?)?;
         }
         Action::Status => status::run(&record)?,
-        Action::Dump => dump::run(&record.clone().with_timezone(&Local))?,
+        Action::Dump { offset } => {
+            if let Some(offset) = offset {
+                let hour = 3600;
+                let timezone = FixedOffset::east_opt(offset * hour)
+                    .ok_or_else(|| error::Main::TimezoneOutOfRange(*offset))?;
+                dump::run(&record.clone().with_timezone(&timezone))?;
+            } else {
+                dump::run(&record.clone().with_timezone(&Local))?;
+            }
+        }
         Action::Edit => {
             let record = edit::run(ctx, record)?;
             fs::write(".punch_clock/record", record.serialize()?)?;

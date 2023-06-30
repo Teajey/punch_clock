@@ -14,7 +14,10 @@ pub enum Action {
     In,
     Out,
     Status,
-    Dump,
+    Dump {
+        #[arg(short, long)]
+        offset: Option<i32>,
+    },
     Edit,
     Stats,
 }

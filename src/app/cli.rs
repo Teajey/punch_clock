@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -7,6 +7,16 @@ pub struct Base {
     pub action: Action,
     #[arg(long)]
     pub init: bool,
+}
+
+#[derive(Args)]
+pub struct Day {
+    #[arg(long, short, requires = "month", requires = "year")]
+    pub day: Option<u32>,
+    #[arg(long, short, requires = "day", requires = "year")]
+    pub month: Option<u32>,
+    #[arg(long, short, requires = "day", requires = "month")]
+    pub year: Option<i32>,
 }
 
 #[derive(Subcommand)]
@@ -19,5 +29,5 @@ pub enum Action {
         offset: Option<i32>,
     },
     Edit,
-    Stats,
+    Stats(Day),
 }

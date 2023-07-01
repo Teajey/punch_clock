@@ -52,4 +52,7 @@ pub enum Main {
 
     #[error("Asked for an out-of-bounds timezone offset: {0}")]
     TimezoneOutOfRange(i32),
+
+    #[error("Date out of range")]
+    DateOutOfRange,
 }

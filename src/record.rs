@@ -1,9 +1,10 @@
 use std::{
+    collections::VecDeque,
     fmt::{Display, Write},
     fs,
 };
 
-use chrono::{DateTime, Duration, FixedOffset, Local, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Days, Duration, FixedOffset, Local, NaiveDate, NaiveTime, TimeZone, Utc};
 
 use crate::error::{self, Result};
 
@@ -212,6 +213,62 @@ impl IntoIterator for Record<Local> {
 }
 
 impl Record<Local> {
+    pub fn days_time(self, day: NaiveDate) -> Result<Duration> {
+        let mut date_pairs = self
+            .into_iter()
+            .map(|entry_result| entry_result.map(Entry::into_date_pair))
+            .filter(|entry| {
+                entry.iter().any(|(check_in, check_out)| {
+                    check_in.date_naive() == day || check_out.date_naive() == day
+                })
+            })
+            .collect::<Result<VecDeque<_>>>()?;
+
+        let Some((first_check_in, first_check_out)) = date_pairs.pop_back() else {
+            return Ok(Duration::zero());
+        };
+
+        let first_check_in = if first_check_in.date_naive() == day {
+            first_check_in
+        } else {
+            match day.and_time(NaiveTime::default()).and_local_timezone(Local) {
+                chrono::LocalResult::None | chrono::LocalResult::Ambiguous(_, _) => {
+                    panic!("If you see this error, send this to the developer: {day:?}")
+                }
+                chrono::LocalResult::Single(dt) => dt,
+            }
+        };
+
+        date_pairs.push_back((first_check_in, first_check_out));
+
+        let Some((last_check_in, last_check_out)) = date_pairs.pop_front() else {
+            return Ok(Duration::zero());
+        };
+
+        let last_check_out = if last_check_out.date_naive() == day {
+            last_check_out
+        } else {
+            match day.and_time(NaiveTime::default()).and_local_timezone(Local) {
+                chrono::LocalResult::None | chrono::LocalResult::Ambiguous(_, _) => {
+                    panic!("If you see this error, send this to the developer: {day:?}")
+                }
+                chrono::LocalResult::Single(dt) => {
+                    let dt = dt
+                        .checked_add_days(Days::new(1))
+                        .ok_or_else(|| error::Main::DateOutOfRange)?;
+                    let dt = dt
+                        .checked_sub_signed(Duration::milliseconds(1))
+                        .ok_or_else(|| error::Main::DateOutOfRange)?;
+                    dt
+                }
+            }
+        };
+
+        date_pairs.push_front((last_check_in, last_check_out));
+
+        Ok(Self::sum_datetime_pairs(date_pairs.into()))
+    }
+
     pub fn todays_time(self) -> Result<Duration> {
         let now = Local::now();
         let today = now.date_naive();

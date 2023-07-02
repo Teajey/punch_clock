@@ -55,4 +55,7 @@ pub enum Main {
 
     #[error("Date out of range")]
     DateOutOfRange,
+
+    #[error("Start must be before end")]
+    RangeStartPosition,
 }

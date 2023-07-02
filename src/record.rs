@@ -4,9 +4,12 @@ use std::{
     fs,
 };
 
-use chrono::{DateTime, Days, Duration, FixedOffset, Local, NaiveDate, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Days, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 
-use crate::error::{self, Result};
+use crate::{
+    error::{self, Result},
+    time::naive_date_into_local_datetime,
+};
 
 #[derive(Clone)]
 pub struct Entry<Tz: TimeZone> {
@@ -213,60 +216,69 @@ impl IntoIterator for Record<Local> {
 }
 
 impl Record<Local> {
-    pub fn days_time(self, day: NaiveDate) -> Result<Duration> {
+    fn into_cropped_datetime_pairs(
+        self,
+        start: DateTime<Local>,
+        end: DateTime<Local>,
+    ) -> Result<Vec<(DateTime<Local>, DateTime<Local>)>> {
+        if end <= start {
+            return Err(error::Main::RangeStartPosition);
+        }
+
         let mut date_pairs = self
             .into_iter()
             .map(|entry_result| entry_result.map(Entry::into_date_pair))
             .filter(|entry| {
                 entry.iter().any(|(check_in, check_out)| {
-                    check_in.date_naive() == day || check_out.date_naive() == day
+                    (start <= *check_in && *check_in < end)
+                        || (start <= *check_out && *check_out < end)
                 })
             })
             .collect::<Result<VecDeque<_>>>()?;
 
-        let Some((first_check_in, first_check_out)) = date_pairs.pop_back() else {
-            return Ok(Duration::zero());
-        };
+        if date_pairs.is_empty() {
+            return Ok(vec![]);
+        }
 
-        let first_check_in = if first_check_in.date_naive() == day {
-            first_check_in
+        let (first_check_in, first_check_out) = date_pairs
+            .pop_back()
+            .expect("date_pairs must be confirmed to have at least one element");
+
+        let first_check_in = if first_check_in < start {
+            start
         } else {
-            match day.and_time(NaiveTime::default()).and_local_timezone(Local) {
-                chrono::LocalResult::None | chrono::LocalResult::Ambiguous(_, _) => {
-                    panic!("If you see this error, send this to the developer: {day:?}")
-                }
-                chrono::LocalResult::Single(dt) => dt,
-            }
+            first_check_in
         };
 
         date_pairs.push_back((first_check_in, first_check_out));
 
-        let Some((last_check_in, last_check_out)) = date_pairs.pop_front() else {
-            return Ok(Duration::zero());
-        };
+        let (last_check_in, last_check_out) = date_pairs
+            .pop_front()
+            .expect("date_pairs must be confirmed to have at least one element");
 
-        let last_check_out = if last_check_out.date_naive() == day {
-            last_check_out
+        let last_check_out = if last_check_out > end {
+            end
         } else {
-            match day.and_time(NaiveTime::default()).and_local_timezone(Local) {
-                chrono::LocalResult::None | chrono::LocalResult::Ambiguous(_, _) => {
-                    panic!("If you see this error, send this to the developer: {day:?}")
-                }
-                chrono::LocalResult::Single(dt) => {
-                    let dt = dt
-                        .checked_add_days(Days::new(1))
-                        .ok_or_else(|| error::Main::DateOutOfRange)?;
-                    let dt = dt
-                        .checked_sub_signed(Duration::milliseconds(1))
-                        .ok_or_else(|| error::Main::DateOutOfRange)?;
-                    dt
-                }
-            }
+            last_check_out
         };
 
         date_pairs.push_front((last_check_in, last_check_out));
 
-        Ok(Self::sum_datetime_pairs(date_pairs.into()))
+        Ok(date_pairs.into())
+    }
+
+    pub fn days_time(self, day: NaiveDate) -> Result<Duration> {
+        let day_start = naive_date_into_local_datetime(day)?;
+
+        let day_end = day_start
+            .checked_add_days(Days::new(1))
+            .ok_or(error::Main::DateOutOfRange)?
+            .checked_sub_signed(Duration::milliseconds(1))
+            .ok_or(error::Main::DateOutOfRange)?;
+
+        let date_pairs = self.into_cropped_datetime_pairs(day_start, day_end)?;
+
+        Ok(Self::sum_datetime_pairs(date_pairs))
     }
 
     pub fn todays_time(self) -> Result<Duration> {
@@ -290,15 +302,7 @@ impl Record<Local> {
         let first_check_in = if first_check_in.date_naive() == today {
             first_check_in
         } else {
-            match today
-                .and_time(NaiveTime::default())
-                .and_local_timezone(Local)
-            {
-                chrono::LocalResult::None | chrono::LocalResult::Ambiguous(_, _) => {
-                    panic!("If you see this error, send this to the developer: {today:?}")
-                }
-                chrono::LocalResult::Single(dt) => dt,
-            }
+            naive_date_into_local_datetime(today)?
         };
 
         date_pairs_today.push((first_check_in, first_check_out));

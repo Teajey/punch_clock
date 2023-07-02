@@ -1,6 +1,8 @@
 use std::fmt::{self, Display, Write};
 
-use chrono::Duration;
+use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime};
+
+use crate::error::Result;
 
 pub fn human_readable_duration(duration: &Duration) -> Result<String, fmt::Error> {
     let mut buf = String::new();
@@ -35,6 +37,18 @@ impl Display for Ago {
             write!(f, " ago")
         } else {
             write!(f, " from now")
+        }
+    }
+}
+
+pub fn naive_date_into_local_datetime(date: NaiveDate) -> Result<DateTime<Local>> {
+    match date
+        .and_time(NaiveTime::default())
+        .and_local_timezone(Local)
+    {
+        chrono::LocalResult::Single(dt) => Ok(dt),
+        chrono::LocalResult::Ambiguous(_, _) | chrono::LocalResult::None => {
+            todo!("I'm not yet sure how to handle this error")
         }
     }
 }

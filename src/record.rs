@@ -284,9 +284,9 @@ impl Record<Local> {
     pub fn todays_time(self) -> Result<Duration> {
         let now = Local::now();
         let today = now.date_naive();
+
         let mut date_pairs_today = self
             .into_iter()
-            .rev()
             .map(|entry_result| entry_result.map(Entry::into_date_pair))
             .take_while(|entry| {
                 entry

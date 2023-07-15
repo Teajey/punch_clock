@@ -184,20 +184,20 @@ impl Iterator for LocalIterator {
     type Item = Result<Entry<Local>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(entry) = self.entries.next() {
-            Some(Ok(entry))
+        if let Some(current_session) = self.current_session_into_entry() {
+            Some(current_session)
         } else {
-            self.current_session_into_entry()
+            self.entries.next().map(Ok)
         }
     }
 }
 
 impl DoubleEndedIterator for LocalIterator {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if let Some(current_session) = self.current_session_into_entry() {
-            Some(current_session)
+        if let Some(entry) = self.entries.next_back() {
+            Some(Ok(entry))
         } else {
-            self.entries.next_back().map(Ok)
+            self.current_session_into_entry()
         }
     }
 }
@@ -291,7 +291,7 @@ impl Record<Local> {
             .take_while(|entry| {
                 entry
                     .iter()
-                    .any(|(check_in, _)| check_in.date_naive() == today)
+                    .any(|(_, check_out)| check_out.date_naive() == today)
             })
             .collect::<Result<Vec<_>>>()?;
 

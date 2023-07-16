@@ -168,74 +168,19 @@ impl<Tz: TimeZone> Record<Tz> {
 
         Duration::seconds(seconds)
     }
-}
-
-pub struct LocalIterator {
-    entries: std::iter::Rev<std::vec::IntoIter<Entry<Local>>>,
-    current_session: std::option::IntoIter<DateTime<Local>>,
-}
-
-impl LocalIterator {
-    fn current_session_into_entry(&mut self) -> Option<Result<Entry<Local>>> {
-        self.current_session
-            .next()
-            .map(|current_session| Entry::try_new(current_session, Local::now()))
-    }
-}
-
-impl Iterator for LocalIterator {
-    type Item = Result<Entry<Local>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(current_session) = self.current_session_into_entry() {
-            Some(current_session)
-        } else {
-            self.entries.next().map(Ok)
-        }
-    }
-}
-
-impl DoubleEndedIterator for LocalIterator {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if let Some(entry) = self.entries.next_back() {
-            Some(Ok(entry))
-        } else {
-            self.current_session_into_entry()
-        }
-    }
-}
-
-impl IntoIterator for Record<Local> {
-    type Item = Result<Entry<Local>>;
-
-    type IntoIter = LocalIterator;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Self::IntoIter {
-            entries: self.entries.into_iter().rev(),
-            current_session: self.current_session.into_iter(),
-        }
-    }
-}
-
-impl Record<Local> {
-    pub fn paint_calendar(&self, range: RangeInclusive<NaiveDate>, width: usize) -> Result<()> {
-        display::paint_day_range(self, range, width)?;
-        Ok(())
-    }
 
     fn try_into_cropped_datetime_pairs(
         self,
-        start: DateTime<Local>,
-        end: DateTime<Local>,
-    ) -> Result<Vec<(DateTime<Local>, DateTime<Local>)>> {
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+    ) -> Result<Vec<(DateTime<Tz>, DateTime<Tz>)>> {
         if end <= start {
             return Err(error::Main::RangeStartPosition);
         }
 
         let mut date_pairs = self
             .into_iter()
-            .map(|entry_result| entry_result.map(Entry::into_date_pair))
+            .map(|item| item.into_entry(|| end.clone()).map(Entry::into_date_pair))
             .filter(|entry| {
                 entry.iter().any(|(check_in, check_out)| {
                     (start <= *check_in && *check_in < end)
@@ -274,6 +219,68 @@ impl Record<Local> {
 
         Ok(date_pairs.into())
     }
+}
+
+pub struct Iterator<Tz: TimeZone> {
+    entries: std::iter::Rev<std::vec::IntoIter<Entry<Tz>>>,
+    current_session: std::option::IntoIter<DateTime<Tz>>,
+}
+
+pub enum Item<Tz: TimeZone> {
+    Entry(Entry<Tz>),
+    CurrentSession(DateTime<Tz>),
+}
+
+impl<Tz: TimeZone> Item<Tz> {
+    pub fn into_entry<F>(self, end: F) -> Result<Entry<Tz>>
+    where
+        F: FnOnce() -> DateTime<Tz>,
+    {
+        match self {
+            Item::Entry(entry) => Ok(entry),
+            Item::CurrentSession(current_session) => Entry::try_new(current_session, end()),
+        }
+    }
+}
+
+impl<Tz: TimeZone> std::iter::Iterator for Iterator<Tz> {
+    type Item = Item<Tz>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.current_session
+            .next()
+            .map(Item::CurrentSession)
+            .or_else(|| self.entries.next().map(Item::Entry))
+    }
+}
+
+impl<Tz: TimeZone> DoubleEndedIterator for Iterator<Tz> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.entries
+            .next_back()
+            .map(Item::Entry)
+            .or_else(|| self.current_session.next_back().map(Item::CurrentSession))
+    }
+}
+
+impl<Tz: TimeZone> IntoIterator for Record<Tz> {
+    type Item = Item<Tz>;
+
+    type IntoIter = Iterator<Tz>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Self::IntoIter {
+            entries: self.entries.into_iter().rev(),
+            current_session: self.current_session.into_iter(),
+        }
+    }
+}
+
+impl Record<Local> {
+    pub fn paint_calendar(&self, range: RangeInclusive<NaiveDate>, width: usize) -> Result<()> {
+        display::paint_day_range(self, range, width)?;
+        Ok(())
+    }
 
     pub fn days_time(self, day: NaiveDate) -> Result<Duration> {
         let day_start = naive_date_into_local_datetime(day);
@@ -295,7 +302,7 @@ impl Record<Local> {
 
         let mut date_pairs_today = self
             .into_iter()
-            .map(|entry_result| entry_result.map(Entry::into_date_pair))
+            .map(|item| item.into_entry(Local::now).map(Entry::into_date_pair))
             .take_while(|entry| {
                 entry
                     .iter()
@@ -321,7 +328,7 @@ impl Record<Local> {
     pub fn total_time(self) -> Result<Duration> {
         let datetime_pairs = self
             .into_iter()
-            .map(|entry_result| entry_result.map(Entry::into_date_pair))
+            .map(|entry| entry.into_entry(Local::now).map(Entry::into_date_pair))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self::sum_datetime_pairs(datetime_pairs))

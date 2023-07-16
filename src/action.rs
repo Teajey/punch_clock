@@ -7,7 +7,7 @@ mod status;
 
 use std::fs;
 
-use chrono::{FixedOffset, Local, NaiveDate, Utc};
+use chrono::{FixedOffset, Local, Utc};
 
 use crate::{
     app::{
@@ -43,18 +43,18 @@ pub fn run(ctx: &context::Base, action: &Action, mut record: Record<Utc>) -> Res
             let record = edit::run(ctx, record)?;
             fs::write(".punch_clock/record", record.serialize()?)?;
         }
-        Action::Stats(Day { day, month, year }) => {
-            let date = match (day, month, year) {
-                (Some(day), Some(month), Some(year)) => Some((day, month, year)),
-                (None, None, None) => None,
-                _ => unreachable!("Day, month, year arguments MUST be provided together"),
-            };
-            let date = date
-                .map(|(day, month, year)| {
-                    NaiveDate::from_ymd_opt(*year, *month, *day).ok_or(error::Main::DateOutOfRange)
-                })
-                .transpose()?;
+        Action::Stats { day } => {
+            let date = day.as_ref().map(|Day(date)| *date);
             stats::run(record.clone().with_timezone(&Local), date)?;
+        }
+        Action::Calendar {
+            from: Day(from),
+            to: Day(to),
+            width,
+        } => {
+            record
+                .with_timezone(&Local)
+                .paint_calendar(*from..=*to, *width)?;
         }
     };
 

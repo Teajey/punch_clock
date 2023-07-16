@@ -1,7 +1,10 @@
+mod display;
+
 use std::{
     collections::VecDeque,
     fmt::{Display, Write},
     fs,
+    ops::RangeInclusive,
 };
 
 use chrono::{DateTime, Days, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
@@ -156,7 +159,7 @@ impl<Tz: TimeZone> Record<Tz> {
         Ok(buf)
     }
 
-    fn sum_datetime_pairs(pairs: Vec<(DateTime<Tz>, DateTime<Tz>)>) -> Duration {
+    pub fn sum_datetime_pairs(pairs: Vec<(DateTime<Tz>, DateTime<Tz>)>) -> Duration {
         let seconds = pairs
             .into_iter()
             .map(|(check_in, check_out)| check_out.signed_duration_since(check_in))
@@ -216,7 +219,12 @@ impl IntoIterator for Record<Local> {
 }
 
 impl Record<Local> {
-    fn into_cropped_datetime_pairs(
+    pub fn paint_calendar(&self, range: RangeInclusive<NaiveDate>, width: usize) -> Result<()> {
+        display::paint_day_range(self, range, width)?;
+        Ok(())
+    }
+
+    fn try_into_cropped_datetime_pairs(
         self,
         start: DateTime<Local>,
         end: DateTime<Local>,
@@ -268,7 +276,7 @@ impl Record<Local> {
     }
 
     pub fn days_time(self, day: NaiveDate) -> Result<Duration> {
-        let day_start = naive_date_into_local_datetime(day)?;
+        let day_start = naive_date_into_local_datetime(day);
 
         let day_end = day_start
             .checked_add_days(Days::new(1))
@@ -276,7 +284,7 @@ impl Record<Local> {
             .checked_sub_signed(Duration::milliseconds(1))
             .ok_or(error::Main::DateOutOfRange)?;
 
-        let date_pairs = self.into_cropped_datetime_pairs(day_start, day_end)?;
+        let date_pairs = self.try_into_cropped_datetime_pairs(day_start, day_end)?;
 
         Ok(Self::sum_datetime_pairs(date_pairs))
     }
@@ -302,7 +310,7 @@ impl Record<Local> {
         let first_check_in = if first_check_in.date_naive() == today {
             first_check_in
         } else {
-            naive_date_into_local_datetime(today)?
+            naive_date_into_local_datetime(today)
         };
 
         date_pairs_today.push((first_check_in, first_check_out));

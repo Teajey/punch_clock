@@ -52,7 +52,6 @@ pub fn paint_day_range(
         time::naive_date_into_local_datetime(range_start),
         time::naive_date_into_local_datetime_end(range_end)?,
     )?;
-    println!("total_datetime_pairs: {total_datetime_pairs:?}");
     let total_duration = Record::sum_datetime_pairs(total_datetime_pairs);
     println!(
         "Total time: {} hours, {} minutes",

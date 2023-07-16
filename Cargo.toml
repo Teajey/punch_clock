@@ -9,3 +9,6 @@ edition = "2021"
 chrono = "0.4.26"
 clap = { version = "4.3.0", features = ["derive"] }
 thiserror = "1.0.40"
+
+[dev-dependencies]
+pretty_assertions = "1.4.0"

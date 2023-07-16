@@ -15,6 +15,7 @@ use crate::{
 };
 
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct Entry<Tz: TimeZone> {
     pub check_in: DateTime<Tz>,
     work_time_millis: u32,
@@ -101,6 +102,7 @@ pub enum Latest<'a, Tz: TimeZone> {
 }
 
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub struct Record<Tz: TimeZone> {
     entries: Vec<Entry<Tz>>,
     current_session: Option<DateTime<Tz>>,
@@ -226,6 +228,7 @@ pub struct Iterator<Tz: TimeZone> {
     current_session: std::option::IntoIter<DateTime<Tz>>,
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub enum Item<Tz: TimeZone> {
     Entry(Entry<Tz>),
     CurrentSession(DateTime<Tz>),
@@ -418,5 +421,72 @@ impl TryFrom<&str> for Record<FixedOffset> {
             entries,
             current_session,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use chrono::{DateTime, FixedOffset, TimeZone};
+    use pretty_assertions::assert_eq;
+
+    use super::Record;
+    use crate::record::{self, Entry};
+
+    fn datetime(hour: u32, min: u32) -> DateTime<FixedOffset> {
+        FixedOffset::west_opt(0)
+            .unwrap()
+            .from_utc_datetime(&chrono::NaiveDateTime::new(
+                chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+                chrono::NaiveTime::from_hms_opt(hour, min, 0).unwrap(),
+            ))
+    }
+
+    fn get_record() -> Record<FixedOffset> {
+        let rec_file = "2023-01-01T00:00:00.000000+00:00 2023-01-01T01:00:00.000000+00:00
+2023-01-01T02:00:00.000000+00:00 2023-01-01T03:00:00.000000+00:00
+2023-01-01T04:00:00.000000+00:00";
+        Record::try_from(rec_file).unwrap()
+    }
+
+    #[test]
+    fn iterator() {
+        let rec = get_record();
+        let rec_vec = rec.into_iter().collect::<Vec<_>>();
+
+        assert_eq!(
+            vec![
+                record::Item::Entry(Entry {
+                    check_in: datetime(0, 0),
+                    work_time_millis: 3_600_000
+                }),
+                record::Item::Entry(Entry {
+                    check_in: datetime(2, 0),
+                    work_time_millis: 3_600_000
+                }),
+                record::Item::CurrentSession(datetime(2, 0)),
+            ],
+            rec_vec
+        );
+    }
+
+    #[test]
+    fn iterator_rev() {
+        let rec = get_record();
+        let rec_vec = rec.into_iter().rev().collect::<Vec<_>>();
+
+        assert_eq!(
+            vec![
+                record::Item::CurrentSession(datetime(2, 0)),
+                record::Item::Entry(Entry {
+                    check_in: datetime(2, 0),
+                    work_time_millis: 3_600_000
+                }),
+                record::Item::Entry(Entry {
+                    check_in: datetime(0, 0),
+                    work_time_millis: 3_600_000
+                }),
+            ],
+            rec_vec
+        );
     }
 }

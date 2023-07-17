@@ -430,10 +430,14 @@ mod test {
     use chrono::{DateTime, FixedOffset, TimeZone};
     use pretty_assertions::assert_eq;
 
-    use super::Record;
+    use super::{display::paint_day_range, Record};
     use crate::record::{self, Entry};
 
-    fn datetime(hour: u32, min: u32) -> DateTime<FixedOffset> {
+    fn date_md(month: u32, day: u32) -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(2023, month, day).unwrap()
+    }
+
+    fn datetime_hm(hour: u32, min: u32) -> DateTime<FixedOffset> {
         FixedOffset::west_opt(0)
             .unwrap()
             .from_utc_datetime(&chrono::NaiveDateTime::new(
@@ -457,14 +461,14 @@ mod test {
         assert_eq!(
             vec![
                 record::Item::Entry(Entry {
-                    check_in: datetime(0, 0),
+                    check_in: datetime_hm(0, 0),
                     work_time_millis: 3_600_000
                 }),
                 record::Item::Entry(Entry {
-                    check_in: datetime(2, 0),
+                    check_in: datetime_hm(2, 0),
                     work_time_millis: 3_600_000
                 }),
-                record::Item::CurrentSession(datetime(4, 0)),
+                record::Item::CurrentSession(datetime_hm(4, 0)),
             ],
             rec_vec
         );
@@ -477,17 +481,25 @@ mod test {
 
         assert_eq!(
             vec![
-                record::Item::CurrentSession(datetime(4, 0)),
+                record::Item::CurrentSession(datetime_hm(4, 0)),
                 record::Item::Entry(Entry {
-                    check_in: datetime(2, 0),
+                    check_in: datetime_hm(2, 0),
                     work_time_millis: 3_600_000
                 }),
                 record::Item::Entry(Entry {
-                    check_in: datetime(0, 0),
+                    check_in: datetime_hm(0, 0),
                     work_time_millis: 3_600_000
                 }),
             ],
             rec_vec
         );
+    }
+
+    // TODO: #[test]
+    fn _range_end_index_49_out_of_range_for_slice_of_length_48() {
+        let rec_file = "2023-07-10T05:05:42.372091+00:00 2023-07-10T09:38:44.320091+00:00
+2023-07-10T20:00:00+00:00        2023-07-10T22:13:34.369+00:00";
+        let _rec = Record::try_from(rec_file).unwrap();
+        // paint_day_range(&rec, date_md(7, 1)..=date_md(7, 10), 48);
     }
 }

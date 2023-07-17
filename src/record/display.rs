@@ -1,12 +1,18 @@
 use std::ops::RangeInclusive;
 
-use chrono::{DateTime, Local, NaiveDate};
+use chrono::{DateTime, NaiveDate};
 
 use super::Record;
-use crate::{error::Result, time};
+use crate::{
+    error::Result,
+    time::{self, NaiveDateOperations, UnfixedTimeZone},
+};
 
 #[allow(clippy::cast_precision_loss)]
-fn tween_dates(start: DateTime<Local>, pos: DateTime<Local>, end: DateTime<Local>) -> f32 {
+fn tween_dates<Tz: UnfixedTimeZone>(range: RangeInclusive<DateTime<Tz>>, pos: DateTime<Tz>) -> f32 {
+    assert!(range.contains(&pos), "Pos date provided outside range");
+    let start = *range.start();
+    let end = *range.end();
     let time_till_pos = pos.signed_duration_since(start).num_milliseconds() as f32;
     let time_till_end = end.signed_duration_since(start).num_milliseconds() as f32;
     time_till_pos / time_till_end
@@ -17,9 +23,9 @@ fn tween_dates(start: DateTime<Local>, pos: DateTime<Local>, end: DateTime<Local
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss
 )]
-pub fn paint_datetime_pairs_line(
-    datetime_pairs: Vec<(DateTime<Local>, DateTime<Local>)>,
-    range: RangeInclusive<DateTime<Local>>,
+pub fn paint_datetime_pairs_line<Tz: UnfixedTimeZone>(
+    datetime_pairs: Vec<(DateTime<Tz>, DateTime<Tz>)>,
+    range: RangeInclusive<DateTime<Tz>>,
     width: usize,
 ) -> String {
     let range_start = *range.start();
@@ -27,8 +33,8 @@ pub fn paint_datetime_pairs_line(
     let mut buf = vec![false; width];
 
     for (start, end) in datetime_pairs {
-        let start_tween = tween_dates(range_start, start, range_end);
-        let end_tween = tween_dates(range_start, end, range_end);
+        let start_tween = tween_dates(range_start..=range_end, start);
+        let end_tween = tween_dates(range_start..=range_end, end);
         let till_end = end_tween - start_tween;
         let paint_start = (width as f32 * start_tween).floor() as usize;
         let paint_length = (width as f32 * till_end).ceil() as usize - 1;
@@ -41,17 +47,16 @@ pub fn paint_datetime_pairs_line(
     buf.into_iter().map(|c| if c { "#" } else { " " }).collect()
 }
 
-pub fn paint_day_range(
-    record: &Record<Local>,
+pub fn paint_day_range<Tz: UnfixedTimeZone>(
+    record: &Record<Tz>,
     range: RangeInclusive<NaiveDate>,
     width: usize,
 ) -> Result<()> {
     let range_start = *range.start();
     let range_end = *range.end();
-    let total_datetime_pairs = record.clone().try_into_cropped_datetime_pairs(
-        time::naive_date_into_local_datetime(range_start),
-        time::naive_date_into_local_datetime_end(range_end)?,
-    )?;
+    let total_datetime_pairs = record
+        .clone()
+        .try_into_cropped_datetime_pairs(range_start.into_day_start(), range_end.into_day_end()?)?;
     let total_duration = Record::sum_datetime_pairs(total_datetime_pairs);
     println!(
         "Total time: {} hours, {} minutes",

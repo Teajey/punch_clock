@@ -7,11 +7,11 @@ use std::{
     ops::RangeInclusive,
 };
 
-use chrono::{DateTime, Days, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 
 use crate::{
     error::{self, Result},
-    time::naive_date_into_local_datetime,
+    time::NaiveDateOperations,
 };
 
 #[derive(Clone)]
@@ -196,7 +196,7 @@ impl<Tz: TimeZone> Record<Tz> {
         }
 
         let (first_check_in, first_check_out) = date_pairs
-            .pop_back()
+            .pop_front()
             .expect("date_pairs must be confirmed to have at least one element");
 
         let first_check_in = if first_check_in < start {
@@ -205,10 +205,10 @@ impl<Tz: TimeZone> Record<Tz> {
             first_check_in
         };
 
-        date_pairs.push_back((first_check_in, first_check_out));
+        date_pairs.push_front((first_check_in, first_check_out));
 
         let (last_check_in, last_check_out) = date_pairs
-            .pop_front()
+            .pop_back()
             .expect("date_pairs must be confirmed to have at least one element");
 
         let last_check_out = if last_check_out > end {
@@ -217,7 +217,7 @@ impl<Tz: TimeZone> Record<Tz> {
             last_check_out
         };
 
-        date_pairs.push_front((last_check_in, last_check_out));
+        date_pairs.push_back((last_check_in, last_check_out));
 
         Ok(date_pairs.into())
     }
@@ -286,15 +286,8 @@ impl Record<Local> {
     }
 
     pub fn days_time(self, day: NaiveDate) -> Result<Duration> {
-        let day_start = naive_date_into_local_datetime(day);
-
-        let day_end = day_start
-            .checked_add_days(Days::new(1))
-            .ok_or(error::Main::DateOutOfRange)?
-            .checked_sub_signed(Duration::milliseconds(1))
-            .ok_or(error::Main::DateOutOfRange)?;
-
-        let date_pairs = self.try_into_cropped_datetime_pairs(day_start, day_end)?;
+        let date_pairs =
+            self.try_into_cropped_datetime_pairs(day.into_day_start(), day.into_day_end()?)?;
 
         Ok(Self::sum_datetime_pairs(date_pairs))
     }
@@ -321,7 +314,7 @@ impl Record<Local> {
         let first_check_in = if first_check_in.date_naive() == today {
             first_check_in
         } else {
-            naive_date_into_local_datetime(today)
+            today.into_day_start()
         };
 
         date_pairs_today.push((first_check_in, first_check_out));
@@ -495,11 +488,23 @@ mod test {
         );
     }
 
-    // TODO: #[test]
-    fn _range_end_index_49_out_of_range_for_slice_of_length_48() {
+    #[test]
+    fn range_end_index_x_out_of_range_for_slice_of_length_y() {
         let rec_file = "2023-07-10T05:05:42.372091+00:00 2023-07-10T09:38:44.320091+00:00
 2023-07-10T20:00:00+00:00        2023-07-10T22:13:34.369+00:00";
-        let _rec = Record::try_from(rec_file).unwrap();
-        // paint_day_range(&rec, date_md(7, 1)..=date_md(7, 10), 48);
+        let rec = Record::try_from(rec_file)
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        paint_day_range(&rec, date_md(7, 9)..=date_md(7, 10), 48).unwrap();
+    }
+
+    #[test]
+    fn range_end_index_x_out_of_range_for_slice_of_length_y_2() {
+        let rec_file = "2023-06-04T21:08:34.790590+00:00 2023-06-04T22:32:47.660590+00:00
+2023-06-05T04:30:04.199633+00:00 2023-06-05T07:18:50.734633+00:00";
+        let rec = Record::try_from(rec_file)
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        paint_day_range(&rec, date_md(6, 4)..=date_md(6, 5), 48).unwrap();
     }
 }

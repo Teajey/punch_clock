@@ -3,7 +3,7 @@ use std::{
     ops::RangeInclusive,
 };
 
-use chrono::{DateTime, Days, Duration, Local, NaiveDate, NaiveTime};
+use chrono::{DateTime, Days, Duration};
 
 use crate::error::{self, Result};
 
@@ -44,37 +44,60 @@ impl Display for Ago {
     }
 }
 
-fn combine_and_localize_date_and_time(date: NaiveDate, time: NaiveTime) -> DateTime<Local> {
-    match date.and_time(time).and_local_timezone(Local) {
-        chrono::LocalResult::Single(dt) => dt,
-        chrono::LocalResult::Ambiguous(_, _) | chrono::LocalResult::None => {
-            todo!("I'm not yet sure how to handle this error")
-        }
+pub fn day_timespan<Tz: UnfixedTimeZone>(
+    day: chrono::NaiveDate,
+) -> Result<RangeInclusive<DateTime<Tz>>> {
+    let day_start = day.into_day_start();
+    let day_end = day.into_day_end()?;
+
+    Ok(day_start..=day_end)
+}
+
+pub trait UnfixedTimeZone: chrono::TimeZone<Offset = <Self as UnfixedTimeZone>::Offset> {
+    type Offset: Copy;
+
+    fn new() -> Self;
+}
+
+impl UnfixedTimeZone for chrono::Utc {
+    type Offset = <Self as chrono::TimeZone>::Offset;
+
+    fn new() -> Self {
+        chrono::Utc
     }
 }
 
-pub fn naive_date_into_local_datetime(date: NaiveDate) -> DateTime<Local> {
-    combine_and_localize_date_and_time(date, NaiveTime::default())
+impl UnfixedTimeZone for chrono::Local {
+    type Offset = <Self as chrono::TimeZone>::Offset;
+
+    fn new() -> Self {
+        chrono::Local
+    }
 }
 
-pub fn naive_date_into_local_datetime_end(date: NaiveDate) -> Result<DateTime<Local>> {
-    let dt = combine_and_localize_date_and_time(
-        date,
-        NaiveTime::from_hms_milli_opt(23, 59, 59, 999)
-            .ok_or_else(|| error::Main::DateOutOfRange)?,
-    );
-
-    Ok(dt)
+pub trait NaiveDateOperations {
+    fn into_day_start<Tz: UnfixedTimeZone>(self) -> DateTime<Tz>;
+    fn into_day_end<Tz: UnfixedTimeZone>(self) -> Result<DateTime<Tz>>;
 }
 
-pub fn day_timespan(day: NaiveDate) -> Result<RangeInclusive<DateTime<Local>>> {
-    let day_start = naive_date_into_local_datetime(day);
+impl NaiveDateOperations for chrono::NaiveDate {
+    fn into_day_start<Tz: UnfixedTimeZone>(self) -> DateTime<Tz> {
+        match self
+            .and_time(chrono::NaiveTime::MIN)
+            .and_local_timezone(Tz::new())
+        {
+            chrono::LocalResult::Single(dt) => dt,
+            chrono::LocalResult::None | chrono::LocalResult::Ambiguous(_, _) => {
+                todo!("I don't know how to handle this atm")
+            }
+        }
+    }
 
-    let day_end = day_start
-        .checked_add_days(Days::new(1))
-        .ok_or(error::Main::DateOutOfRange)?
-        .checked_sub_signed(Duration::milliseconds(1))
-        .ok_or(error::Main::DateOutOfRange)?;
-
-    Ok(day_start..=day_end)
+    fn into_day_end<Tz: UnfixedTimeZone>(self) -> Result<DateTime<Tz>> {
+        self.into_day_start()
+            .checked_add_days(Days::new(1))
+            .ok_or(error::Main::DateOutOfRange)?
+            .checked_sub_signed(Duration::nanoseconds(1))
+            .ok_or(error::Main::DateOutOfRange)
+    }
 }

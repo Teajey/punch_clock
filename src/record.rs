@@ -250,19 +250,19 @@ impl<Tz: TimeZone> std::iter::Iterator for Iterator<Tz> {
     type Item = Item<Tz>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.current_session
-            .next()
-            .map(Item::CurrentSession)
-            .or_else(|| self.entries.next().map(Item::Entry))
+        self.entries
+            .next_back()
+            .map(Item::Entry)
+            .or_else(|| self.current_session.next().map(Item::CurrentSession))
     }
 }
 
 impl<Tz: TimeZone> DoubleEndedIterator for Iterator<Tz> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.entries
+        self.current_session
             .next_back()
-            .map(Item::Entry)
-            .or_else(|| self.current_session.next_back().map(Item::CurrentSession))
+            .map(Item::CurrentSession)
+            .or_else(|| self.entries.next().map(Item::Entry))
     }
 }
 
@@ -306,6 +306,7 @@ impl Record<Local> {
         let mut date_pairs_today = self
             .into_iter()
             .map(|item| item.into_entry(Local::now).map(Entry::into_date_pair))
+            .rev()
             .take_while(|entry| {
                 entry
                     .iter()
@@ -463,7 +464,7 @@ mod test {
                     check_in: datetime(2, 0),
                     work_time_millis: 3_600_000
                 }),
-                record::Item::CurrentSession(datetime(2, 0)),
+                record::Item::CurrentSession(datetime(4, 0)),
             ],
             rec_vec
         );
@@ -476,7 +477,7 @@ mod test {
 
         assert_eq!(
             vec![
-                record::Item::CurrentSession(datetime(2, 0)),
+                record::Item::CurrentSession(datetime(4, 0)),
                 record::Item::Entry(Entry {
                     check_in: datetime(2, 0),
                     work_time_millis: 3_600_000

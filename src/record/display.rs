@@ -37,9 +37,9 @@ pub fn paint_datetime_pairs_line<Tz: UnfixedTimeZone>(
         let end_tween = tween_dates(range_start..=range_end, end);
         let till_end = end_tween - start_tween;
         let paint_start = (width as f32 * start_tween).floor() as usize;
-        let paint_length = (width as f32 * till_end).ceil() as usize - 1;
+        let paint_length = (width as f32 * till_end).round() as usize;
         let paint_end = paint_start + paint_length;
-        for c in &mut buf[paint_start..=paint_end] {
+        for c in &mut buf[paint_start..paint_end] {
             *c = true;
         }
     }
@@ -173,6 +173,29 @@ mod tests {
             },
             24,
         );
-        assert_eq!("# #  ##   #######  #   #", line);
+        assert_eq!("# #  ##   #######      #", line);
+    }
+
+    #[test]
+    fn paint_full() {
+        let line = super::paint_datetime_pairs_line(
+            vec![(datetime(0, 0), datetime(23, 59))],
+            datetime(0, 0)..=datetime(23, 59),
+            24,
+        );
+        assert_eq!("########################", line);
+    }
+
+    #[test]
+    fn paint_both_ends() {
+        let line = super::paint_datetime_pairs_line(
+            vec![
+                (datetime(0, 0), datetime(6, 0)),
+                (datetime(18, 0), datetime(23, 59)),
+            ],
+            datetime(0, 0)..=datetime(23, 59),
+            24,
+        );
+        assert_eq!("######            ######", line);
     }
 }

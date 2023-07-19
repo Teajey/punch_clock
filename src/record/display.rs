@@ -58,6 +58,7 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
     let range_start = *range.start();
     let range_end = *range.end();
     let total_datetime_pairs = record.clone().try_into_cropped_datetime_pairs(
+        ctx,
         range_start.into_day_start(ctx)?,
         range_end.into_day_end(ctx)?,
     )?;
@@ -69,9 +70,11 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
     );
     for day in range_start.iter_days().take_while(|d| d <= &range_end) {
         let day_span = time::day_timespan(ctx, day)?;
-        let datetime_pairs = record
-            .clone()
-            .try_into_cropped_datetime_pairs(*day_span.start(), *day_span.end())?;
+        let datetime_pairs = record.clone().try_into_cropped_datetime_pairs(
+            ctx,
+            *day_span.start(),
+            *day_span.end(),
+        )?;
         let duration = Record::sum_datetime_pairs(datetime_pairs.clone());
         println!(
             "{} {} {}",
@@ -90,28 +93,33 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
+    use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 
     use super::Record;
-    use crate::record::Entry;
+    use crate::{app::Context, record::Entry};
 
-    fn datetime(hour: u32, min: u32) -> DateTime<Local> {
+    fn tz() -> FixedOffset {
+        FixedOffset::east_opt(0).unwrap()
+    }
+
+    fn datetime(hour: u32, min: u32) -> DateTime<FixedOffset> {
         let chrono::LocalResult::Single(dt) = NaiveDateTime::new(
             NaiveDate::from_ymd_opt(2023, 7, 15).unwrap(),
             NaiveTime::from_hms_opt(hour, min, 0).unwrap(),
         )
-        .and_local_timezone(Local) else {
+        .and_local_timezone(tz()) else {
             panic!("datetime failed!");
         };
 
         dt
     }
 
-    fn entry(hour1: u32, min1: u32, hour2: u32, min2: u32) -> Entry<Local> {
+    fn entry(hour1: u32, min1: u32, hour2: u32, min2: u32) -> Entry<FixedOffset> {
         Entry::try_new(datetime(hour1, min1), datetime(hour2, min2)).unwrap()
     }
 
-    fn line_from_record(record: Record<Local>, width: usize) -> String {
+    fn line_from_record(record: Record<FixedOffset>, width: usize) -> String {
+        let ctx = Context::init(FixedOffset::east_opt(0).unwrap()).unwrap();
         let today_start = datetime(0, 0);
         let today_end = today_start.checked_add_days(chrono::Days::new(1)).unwrap();
         let today_end = today_end
@@ -119,7 +127,7 @@ mod tests {
             .unwrap();
 
         let datetime_pairs = record
-            .try_into_cropped_datetime_pairs(today_start, today_end)
+            .try_into_cropped_datetime_pairs(&ctx, today_start, today_end)
             .unwrap();
 
         super::paint_datetime_pairs_line(datetime_pairs, today_start..=today_end, width)

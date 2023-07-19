@@ -8,6 +8,7 @@ use std::{
 };
 
 use chrono::{DateTime, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
+use context::Context;
 
 use crate::{
     app::context,
@@ -171,57 +172,6 @@ impl<Tz: TimeZone> Record<Tz> {
 
         Duration::seconds(seconds)
     }
-
-    fn try_into_cropped_datetime_pairs(
-        self,
-        start: DateTime<Tz>,
-        end: DateTime<Tz>,
-    ) -> Result<Vec<(DateTime<Tz>, DateTime<Tz>)>> {
-        if end <= start {
-            return Err(error::Main::RangeStartPosition);
-        }
-
-        let mut date_pairs = self
-            .into_iter()
-            .map(|item| item.into_entry(|| end.clone()).map(Entry::into_date_pair))
-            .filter(|entry| {
-                entry.iter().any(|(check_in, check_out)| {
-                    (start <= *check_in && *check_in < end)
-                        || (start <= *check_out && *check_out < end)
-                })
-            })
-            .collect::<Result<VecDeque<_>>>()?;
-
-        if date_pairs.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let (first_check_in, first_check_out) = date_pairs
-            .pop_front()
-            .expect("date_pairs must be confirmed to have at least one element");
-
-        let first_check_in = if first_check_in < start {
-            start
-        } else {
-            first_check_in
-        };
-
-        date_pairs.push_front((first_check_in, first_check_out));
-
-        let (last_check_in, last_check_out) = date_pairs
-            .pop_back()
-            .expect("date_pairs must be confirmed to have at least one element");
-
-        let last_check_out = if last_check_out > end {
-            end
-        } else {
-            last_check_out
-        };
-
-        date_pairs.push_back((last_check_in, last_check_out));
-
-        Ok(date_pairs.into())
-    }
 }
 
 pub struct Iterator<Tz: TimeZone> {
@@ -292,8 +242,11 @@ impl<Tz: ContextTimeZone> Record<Tz> {
     }
 
     pub fn days_time(self, ctx: &context::Context<Tz>, day: NaiveDate) -> Result<Duration> {
-        let date_pairs =
-            self.try_into_cropped_datetime_pairs(day.into_day_start(ctx)?, day.into_day_end(ctx)?)?;
+        let date_pairs = self.try_into_cropped_datetime_pairs(
+            ctx,
+            day.into_day_start(ctx)?,
+            day.into_day_end(ctx)?,
+        )?;
 
         Ok(Self::sum_datetime_pairs(date_pairs))
     }
@@ -342,6 +295,61 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self::sum_datetime_pairs(datetime_pairs))
+    }
+
+    fn try_into_cropped_datetime_pairs(
+        self,
+        ctx: &Context<Tz>,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+    ) -> Result<Vec<(DateTime<Tz>, DateTime<Tz>)>> {
+        if end <= start {
+            return Err(error::Main::RangeStartPosition);
+        }
+
+        let mut date_pairs = self
+            .into_iter()
+            .map(|item| {
+                item.into_entry(|| ctx.timezone.now().min(end))
+                    .map(Entry::into_date_pair)
+            })
+            .filter(|entry| {
+                entry.iter().any(|(check_in, check_out)| {
+                    (start <= *check_in && *check_in < end)
+                        || (start <= *check_out && *check_out < end)
+                })
+            })
+            .collect::<Result<VecDeque<_>>>()?;
+
+        if date_pairs.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let (first_check_in, first_check_out) = date_pairs
+            .pop_front()
+            .expect("date_pairs must be confirmed to have at least one element");
+
+        let first_check_in = if first_check_in < start {
+            start
+        } else {
+            first_check_in
+        };
+
+        date_pairs.push_front((first_check_in, first_check_out));
+
+        let (last_check_in, last_check_out) = date_pairs
+            .pop_back()
+            .expect("date_pairs must be confirmed to have at least one element");
+
+        let last_check_out = if last_check_out > end {
+            end
+        } else {
+            last_check_out
+        };
+
+        date_pairs.push_back((last_check_in, last_check_out));
+
+        Ok(date_pairs.into())
     }
 }
 

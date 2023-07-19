@@ -1,15 +1,17 @@
 use std::ops::RangeInclusive;
 
 use chrono::{DateTime, NaiveDate};
+use context::Context;
 
 use super::Record;
 use crate::{
+    app::context,
     error::Result,
-    time::{self, NaiveDateOperations, UnfixedTimeZone},
+    time::{self, ContextTimeZone, NaiveDateOperations},
 };
 
 #[allow(clippy::cast_precision_loss)]
-fn tween_dates<Tz: UnfixedTimeZone>(range: RangeInclusive<DateTime<Tz>>, pos: DateTime<Tz>) -> f32 {
+fn tween_dates<Tz: ContextTimeZone>(range: RangeInclusive<DateTime<Tz>>, pos: DateTime<Tz>) -> f32 {
     assert!(range.contains(&pos), "Pos date provided outside range");
     let start = *range.start();
     let end = *range.end();
@@ -23,7 +25,7 @@ fn tween_dates<Tz: UnfixedTimeZone>(range: RangeInclusive<DateTime<Tz>>, pos: Da
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss
 )]
-pub fn paint_datetime_pairs_line<Tz: UnfixedTimeZone>(
+pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
     datetime_pairs: Vec<(DateTime<Tz>, DateTime<Tz>)>,
     range: RangeInclusive<DateTime<Tz>>,
     width: usize,
@@ -47,16 +49,18 @@ pub fn paint_datetime_pairs_line<Tz: UnfixedTimeZone>(
     buf.into_iter().map(|c| if c { "#" } else { " " }).collect()
 }
 
-pub fn paint_day_range<Tz: UnfixedTimeZone>(
+pub fn paint_day_range<Tz: ContextTimeZone>(
+    ctx: &Context<Tz>,
     record: &Record<Tz>,
     range: RangeInclusive<NaiveDate>,
     width: usize,
 ) -> Result<()> {
     let range_start = *range.start();
     let range_end = *range.end();
-    let total_datetime_pairs = record
-        .clone()
-        .try_into_cropped_datetime_pairs(range_start.into_day_start(), range_end.into_day_end()?)?;
+    let total_datetime_pairs = record.clone().try_into_cropped_datetime_pairs(
+        range_start.into_day_start(ctx)?,
+        range_end.into_day_end(ctx)?,
+    )?;
     let total_duration = Record::sum_datetime_pairs(total_datetime_pairs);
     println!(
         "Total time: {} hours, {} minutes",
@@ -64,7 +68,7 @@ pub fn paint_day_range<Tz: UnfixedTimeZone>(
         total_duration.num_minutes() % 60
     );
     for day in range_start.iter_days().take_while(|d| d <= &range_end) {
-        let day_span = time::day_timespan(day)?;
+        let day_span = time::day_timespan(ctx, day)?;
         let datetime_pairs = record
             .clone()
             .try_into_cropped_datetime_pairs(*day_span.start(), *day_span.end())?;

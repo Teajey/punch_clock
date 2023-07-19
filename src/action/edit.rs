@@ -3,12 +3,13 @@ use std::fs;
 use chrono::{Local, Utc};
 
 use crate::{
-    app::context,
+    app::context::Context,
     error::{self, Result},
     record::Record,
+    time::ContextTimeZone,
 };
 
-pub fn run(ctx: &context::Base, record: Record<Utc>) -> Result<Record<Utc>> {
+pub fn run<Tz: ContextTimeZone>(ctx: &Context<Tz>, record: Record<Utc>) -> Result<Record<Utc>> {
     let record_string = record.with_timezone(&Local).serialize()?;
     let edit_path = ".punch_clock/EDIT_RECORD";
 

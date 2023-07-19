@@ -10,8 +10,9 @@ use std::{
 use chrono::{DateTime, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 
 use crate::{
+    app::context,
     error::{self, Result},
-    time::NaiveDateOperations,
+    time::{ContextTimeZone, NaiveDateOperations},
 };
 
 #[derive(Clone)]
@@ -279,26 +280,34 @@ impl<Tz: TimeZone> IntoIterator for Record<Tz> {
     }
 }
 
-impl Record<Local> {
-    pub fn paint_calendar(&self, range: RangeInclusive<NaiveDate>, width: usize) -> Result<()> {
-        display::paint_day_range(self, range, width)?;
+impl<Tz: ContextTimeZone> Record<Tz> {
+    pub fn paint_calendar(
+        &self,
+        ctx: &context::Context<Tz>,
+        range: RangeInclusive<NaiveDate>,
+        width: usize,
+    ) -> Result<()> {
+        display::paint_day_range(ctx, self, range, width)?;
         Ok(())
     }
 
-    pub fn days_time(self, day: NaiveDate) -> Result<Duration> {
+    pub fn days_time(self, ctx: &context::Context<Tz>, day: NaiveDate) -> Result<Duration> {
         let date_pairs =
-            self.try_into_cropped_datetime_pairs(day.into_day_start(), day.into_day_end()?)?;
+            self.try_into_cropped_datetime_pairs(day.into_day_start(ctx)?, day.into_day_end(ctx)?)?;
 
         Ok(Self::sum_datetime_pairs(date_pairs))
     }
 
-    pub fn todays_time(self) -> Result<Duration> {
+    pub fn todays_time(self, ctx: &context::Context<Tz>) -> Result<Duration> {
         let now = Local::now();
         let today = now.date_naive();
 
         let mut date_pairs_today = self
             .into_iter()
-            .map(|item| item.into_entry(Local::now).map(Entry::into_date_pair))
+            .map(|item| {
+                item.into_entry(|| ctx.timezone.now())
+                    .map(Entry::into_date_pair)
+            })
             .rev()
             .take_while(|entry| {
                 entry
@@ -314,7 +323,7 @@ impl Record<Local> {
         let first_check_in = if first_check_in.date_naive() == today {
             first_check_in
         } else {
-            today.into_day_start()
+            today.into_day_start(ctx)?
         };
 
         date_pairs_today.push((first_check_in, first_check_out));
@@ -322,10 +331,14 @@ impl Record<Local> {
         Ok(Self::sum_datetime_pairs(date_pairs_today))
     }
 
-    pub fn total_time(self) -> Result<Duration> {
+    pub fn total_time(self, ctx: &context::Context<Tz>) -> Result<Duration> {
         let datetime_pairs = self
             .into_iter()
-            .map(|entry| entry.into_entry(Local::now).map(Entry::into_date_pair))
+            .map(|entry| {
+                entry
+                    .into_entry(|| ctx.timezone.now())
+                    .map(Entry::into_date_pair)
+            })
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self::sum_datetime_pairs(datetime_pairs))
@@ -424,7 +437,10 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::{display::paint_day_range, Record};
-    use crate::record::{self, Entry};
+    use crate::{
+        app::context,
+        record::{self, Entry},
+    };
 
     fn date_md(month: u32, day: u32) -> chrono::NaiveDate {
         chrono::NaiveDate::from_ymd_opt(2023, month, day).unwrap()
@@ -490,21 +506,29 @@ mod test {
 
     #[test]
     fn range_end_index_x_out_of_range_for_slice_of_length_y() {
+        let ctx = context::Context {
+            editor_path: String::new(),
+            timezone: FixedOffset::east_opt(0).unwrap(),
+        };
         let rec_file = "2023-07-10T05:05:42.372091+00:00 2023-07-10T09:38:44.320091+00:00
 2023-07-10T20:00:00+00:00        2023-07-10T22:13:34.369+00:00";
         let rec = Record::try_from(rec_file)
             .unwrap()
-            .with_timezone(&chrono::Utc);
-        paint_day_range(&rec, date_md(7, 9)..=date_md(7, 10), 48).unwrap();
+            .with_timezone(&ctx.timezone);
+        paint_day_range(&ctx, &rec, date_md(7, 9)..=date_md(7, 10), 48).unwrap();
     }
 
     #[test]
     fn range_end_index_x_out_of_range_for_slice_of_length_y_2() {
+        let ctx = context::Context {
+            editor_path: String::new(),
+            timezone: FixedOffset::east_opt(0).unwrap(),
+        };
         let rec_file = "2023-06-04T21:08:34.790590+00:00 2023-06-04T22:32:47.660590+00:00
 2023-06-05T04:30:04.199633+00:00 2023-06-05T07:18:50.734633+00:00";
         let rec = Record::try_from(rec_file)
             .unwrap()
-            .with_timezone(&chrono::Utc);
-        paint_day_range(&rec, date_md(6, 4)..=date_md(6, 5), 48).unwrap();
+            .with_timezone(&ctx.timezone);
+        paint_day_range(&ctx, &rec, date_md(6, 4)..=date_md(6, 5), 48).unwrap();
     }
 }

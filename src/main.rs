@@ -6,7 +6,7 @@ mod error;
 mod record;
 
 use clap::Parser;
-use chrono::Utc;
+use chrono::{Utc, FixedOffset, Local};
 
 fn main() {
     if let Err(err) = run() {
@@ -18,8 +18,6 @@ fn main() {
 fn run() -> error::Result<()> {
     let cli = app::cli::Base::parse();
 
-    let ctx = app::context::init()?;
-
     if cli.init {
         record::Record::init()?;
     }
@@ -28,7 +26,14 @@ fn run() -> error::Result<()> {
         return Err(error::Main::Uninitialized);  
     };
 
-    action::run(&ctx, &cli.action, record)?;
+    if let Some(offset) = cli.offset {
+        let ctx = app::Context::init(FixedOffset::east_opt(offset * 3600).ok_or_else(|| error::Main::TimezoneOutOfRange(offset))?)?;
+        action::run(&ctx, &cli.action, record)?;
+    } else {
+        let ctx = app::Context::init(Local)?;
+        action::run(&ctx, &cli.action, record)?;
+    }
+
 
     Ok(())
 }

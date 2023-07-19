@@ -12,13 +12,18 @@ use chrono::{FixedOffset, Local, Utc};
 use crate::{
     app::{
         cli::{Action, Day},
-        context,
+        context::Context,
     },
     error::{self, Result},
     record::Record,
+    time::ContextTimeZone,
 };
 
-pub fn run(ctx: &context::Base, action: &Action, mut record: Record<Utc>) -> Result<()> {
+pub fn run<Tz: ContextTimeZone>(
+    ctx: &Context<Tz>,
+    action: &Action,
+    mut record: Record<Utc>,
+) -> Result<()> {
     match action {
         Action::In => {
             enter::run(&mut record)?;
@@ -45,7 +50,7 @@ pub fn run(ctx: &context::Base, action: &Action, mut record: Record<Utc>) -> Res
         }
         Action::Stats { day } => {
             let date = day.as_ref().map(|Day(date)| *date);
-            stats::run(record.clone().with_timezone(&Local), date)?;
+            stats::run(ctx, record.clone().with_timezone(&ctx.timezone), date)?;
         }
         Action::Calendar {
             from: Day(from),
@@ -53,8 +58,8 @@ pub fn run(ctx: &context::Base, action: &Action, mut record: Record<Utc>) -> Res
             width,
         } => {
             record
-                .with_timezone(&Local)
-                .paint_calendar(*from..=*to, *width)?;
+                .with_timezone(&ctx.timezone)
+                .paint_calendar(ctx, *from..=*to, *width)?;
         }
     };
 

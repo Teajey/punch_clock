@@ -11,6 +11,8 @@ pub struct Base {
     pub action: Action,
     #[arg(long)]
     pub init: bool,
+    #[arg(short, long)]
+    pub offset: Option<i32>,
 }
 
 #[derive(Subcommand)]

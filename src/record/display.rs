@@ -38,7 +38,7 @@ pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
         let start_tween = tween_dates(range_start..=range_end, start);
         let end_tween = tween_dates(range_start..=range_end, end);
         let till_end = end_tween - start_tween;
-        let paint_start = (width as f32 * start_tween).floor() as usize;
+        let paint_start = (width as f32 * start_tween).round() as usize;
         let paint_length = (width as f32 * till_end).round() as usize;
         let paint_end = paint_start + paint_length;
         for c in &mut buf[paint_start..paint_end] {
@@ -46,7 +46,7 @@ pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
         }
     }
 
-    buf.into_iter().map(|c| if c { "#" } else { " " }).collect()
+    buf.into_iter().map(|c| if c { "█" } else { "░" }).collect()
 }
 
 pub fn paint_day_range<Tz: ContextTimeZone>(
@@ -134,7 +134,7 @@ mod tests {
             },
             10,
         );
-        assert_eq!("#####     ", line);
+        assert_eq!("█████░░░░░", line);
     }
 
     #[test]
@@ -146,7 +146,7 @@ mod tests {
             },
             10,
         );
-        assert_eq!("  #####   ", line);
+        assert_eq!("░░░█████░░", line);
     }
 
     #[test]
@@ -158,7 +158,7 @@ mod tests {
             },
             10,
         );
-        assert_eq!("     #####", line);
+        assert_eq!("░░░░░█████", line);
     }
 
     #[test]
@@ -177,7 +177,7 @@ mod tests {
             },
             24,
         );
-        assert_eq!("# #  ##   #######      #", line);
+        assert_eq!("█░█░░██░░░███████░░░░░░█", line);
     }
 
     #[test]
@@ -187,7 +187,7 @@ mod tests {
             datetime(0, 0)..=datetime(23, 59),
             24,
         );
-        assert_eq!("########################", line);
+        assert_eq!("████████████████████████", line);
     }
 
     #[test]
@@ -200,6 +200,6 @@ mod tests {
             datetime(0, 0)..=datetime(23, 59),
             24,
         );
-        assert_eq!("######            ######", line);
+        assert_eq!("██████░░░░░░░░░░░░██████", line);
     }
 }

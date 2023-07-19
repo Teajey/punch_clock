@@ -18,6 +18,8 @@ fn main() {
 fn run() -> error::Result<()> {
     let cli = app::cli::Base::parse();
 
+    std::env::set_current_dir(fs::file_location_in_path_by_prefix(".punch_clock")?)?;
+
     if cli.init {
         record::Record::init()?;
     }

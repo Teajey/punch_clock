@@ -63,7 +63,7 @@ pub trait NaiveDateOperations {
 }
 
 pub trait ContextTimeZone: TimeZone<Offset = <Self as ContextTimeZone>::Offset> + Copy {
-    type Offset: Copy;
+    type Offset: Copy + Display;
 
     fn now(&self) -> DateTime<Self>;
 }

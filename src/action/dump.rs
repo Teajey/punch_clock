@@ -1,13 +1,10 @@
-use chrono::TimeZone;
-
-use crate::{error::Result, record::Record};
+use crate::{error::Result, record::Record, time::ContextTimeZone};
 
 const DATE_FORMAT: &str = "%e %b %Y %I:%M%P %Z";
 
 pub fn run<Tz>(record: &Record<Tz>) -> Result<()>
 where
-    Tz: TimeZone,
-    Tz::Offset: std::fmt::Display,
+    Tz: ContextTimeZone,
 {
     println!("| {:<40} | {:<40} |", "Check-in", "Check-out");
     for _ in 0..89 {

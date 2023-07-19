@@ -20,10 +20,7 @@ pub enum Action {
     In,
     Out,
     Status,
-    Dump {
-        #[arg(short, long)]
-        offset: Option<i32>,
-    },
+    Dump,
     Edit,
     Stats {
         day: Option<day::Day>,

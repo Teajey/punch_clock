@@ -39,8 +39,7 @@ pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
         let end_tween = tween_dates(range_start..=range_end, end);
         let till_end = end_tween - start_tween;
         let paint_start = (width as f32 * start_tween).round() as usize;
-        let paint_length = (width as f32 * till_end).round() as usize;
-        let paint_end = paint_start + paint_length;
+        let paint_end = (width as f32 * (start_tween + till_end)).round() as usize;
         for c in &mut buf[paint_start..paint_end] {
             *c = true;
         }

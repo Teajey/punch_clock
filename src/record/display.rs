@@ -29,6 +29,7 @@ pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
     datetime_pairs: Vec<(DateTime<Tz>, DateTime<Tz>)>,
     range: RangeInclusive<DateTime<Tz>>,
     width: usize,
+    background_shift: bool,
 ) -> String {
     let range_start = *range.start();
     let range_end = *range.end();
@@ -45,7 +46,21 @@ pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
         }
     }
 
-    buf.into_iter().map(|c| if c { "█" } else { "░" }).collect()
+    buf.into_iter()
+        .enumerate()
+        .map(|(i, c)| {
+            if c {
+                "█"
+            } else {
+                let c_parity = i % 2 != 0;
+                if c_parity ^ background_shift {
+                    "░"
+                } else {
+                    "▒"
+                }
+            }
+        })
+        .collect()
 }
 
 pub fn paint_day_range<Tz: ContextTimeZone>(
@@ -67,7 +82,11 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
         total_duration.num_hours(),
         total_duration.num_minutes() % 60
     );
-    for day in range_start.iter_days().take_while(|d| d <= &range_end) {
+    for (i, day) in range_start
+        .iter_days()
+        .take_while(|d| d <= &range_end)
+        .enumerate()
+    {
         let day_span = time::day_timespan(ctx, day)?;
         let datetime_pairs = record.clone().try_into_cropped_datetime_pairs(
             ctx,
@@ -78,7 +97,7 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
         println!(
             "{} {} {}",
             day.format("%F"),
-            paint_datetime_pairs_line(datetime_pairs.clone(), day_span, width),
+            paint_datetime_pairs_line(datetime_pairs, day_span, width, i % 2 != 0),
             if duration.is_zero() {
                 String::new()
             } else {
@@ -129,7 +148,7 @@ mod tests {
             .try_into_cropped_datetime_pairs(&ctx, today_start, today_end)
             .unwrap();
 
-        super::paint_datetime_pairs_line(datetime_pairs, today_start..=today_end, width)
+        super::paint_datetime_pairs_line(datetime_pairs, today_start..=today_end, width, false)
     }
 
     #[test]
@@ -141,7 +160,7 @@ mod tests {
             },
             10,
         );
-        assert_eq!("█████░░░░░", line);
+        assert_eq!("█████░▒░▒░", line);
     }
 
     #[test]
@@ -153,7 +172,7 @@ mod tests {
             },
             10,
         );
-        assert_eq!("░░░█████░░", line);
+        assert_eq!("▒░▒█████▒░", line);
     }
 
     #[test]
@@ -165,7 +184,7 @@ mod tests {
             },
             10,
         );
-        assert_eq!("░░░░░█████", line);
+        assert_eq!("▒░▒░▒█████", line);
     }
 
     #[test]
@@ -184,7 +203,7 @@ mod tests {
             },
             24,
         );
-        assert_eq!("█░█░░██░░░███████░░░░░░█", line);
+        assert_eq!("█░█░▒██░▒░███████░▒░▒░▒█", line);
     }
 
     #[test]
@@ -193,6 +212,7 @@ mod tests {
             vec![(datetime(0, 0), datetime(23, 59))],
             datetime(0, 0)..=datetime(23, 59),
             24,
+            false,
         );
         assert_eq!("████████████████████████", line);
     }
@@ -206,7 +226,8 @@ mod tests {
             ],
             datetime(0, 0)..=datetime(23, 59),
             24,
+            false,
         );
-        assert_eq!("██████░░░░░░░░░░░░██████", line);
+        assert_eq!("██████▒░▒░▒░▒░▒░▒░██████", line);
     }
 }

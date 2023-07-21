@@ -49,15 +49,13 @@ pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
     buf.into_iter()
         .enumerate()
         .map(|(i, c)| {
+            let c_parity = i % 2 != 0;
             if c {
-                "█"
+                "▓"
+            } else if c_parity ^ background_shift {
+                "░"
             } else {
-                let c_parity = i % 2 != 0;
-                if c_parity ^ background_shift {
-                    "░"
-                } else {
-                    "▒"
-                }
+                "▒"
             }
         })
         .collect()

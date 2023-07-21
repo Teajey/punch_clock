@@ -51,19 +51,22 @@ impl<Tz: TimeZone> Entry<Tz> {
         }
     }
 
-    fn get_work_time(&self) -> Duration {
+    fn get_work_duration(&self) -> Duration {
         Duration::milliseconds(self.work_time_millis.into())
     }
 
     pub fn get_check_out(&self) -> Result<DateTime<Tz>> {
         self.check_in
             .clone()
-            .checked_add_signed(self.get_work_time())
+            .checked_add_signed(self.get_work_duration())
             .ok_or_else(|| error::Main::DateTimeOverflow)
     }
 
-    fn into_date_pair(self) -> (DateTime<Tz>, DateTime<Tz>) {
-        let check_out = self.check_in.clone() + self.get_work_time();
+    fn into_date_pair(self) -> (DateTime<Tz>, DateTime<Tz>)
+    where
+        Tz::Offset: Copy,
+    {
+        let check_out = self.check_in + self.get_work_duration();
 
         (self.check_in, check_out)
     }
@@ -297,6 +300,11 @@ impl<Tz: ContextTimeZone> Record<Tz> {
         Ok(Self::sum_datetime_pairs(datetime_pairs))
     }
 
+    pub fn current_session_time(&self, ctx: &Context<Tz>) -> Option<Duration> {
+        self.current_session
+            .map(|sesh| sesh.signed_duration_since(ctx.timezone.now()))
+    }
+
     fn try_into_cropped_datetime_pairs(
         self,
         ctx: &Context<Tz>,
@@ -354,27 +362,31 @@ impl<Tz: ContextTimeZone> Record<Tz> {
 }
 
 impl Record<Utc> {
-    pub fn clock_in(&mut self) -> Result<()> {
+    pub fn clock_in(&mut self) -> Result<DateTime<Utc>> {
         if self.current_session.is_some() {
             return Err(error::Main::AlreadyClockedIn);
         };
 
-        self.current_session = Some(Utc::now());
+        let now = Utc::now();
 
-        Ok(())
+        self.current_session = Some(now);
+
+        Ok(now)
     }
 
-    pub fn clock_out(&mut self) -> Result<()> {
+    pub fn clock_out(&mut self) -> Result<Duration> {
         let Some(current_session) = self.current_session else {
             return Err(error::Main::NotClockedIn);
         };
+
+        let since = current_session.signed_duration_since(Utc::now());
 
         self.entries
             .push(Entry::try_new(current_session, Utc::now())?);
 
         self.current_session = None;
 
-        Ok(())
+        Ok(since)
     }
 
     pub fn load() -> Result<Option<Self>> {

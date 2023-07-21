@@ -21,11 +21,17 @@ pub fn run<Tz: ContextTimeZone>(
     } else {
         let record_duration = record.clone().total_time(ctx)?;
         println!("Total time: {}", human_readable_duration(&record_duration)?);
-        let record_duration_today = record.todays_time(ctx)?;
+        let record_duration_today = record.clone().todays_time(ctx)?;
         println!(
             "Total time today: {}",
             human_readable_duration(&record_duration_today)?
         );
+        if let Some(session_time) = record.current_session_time(ctx) {
+            println!(
+                "Total time this session: {}",
+                human_readable_duration(&session_time)?
+            );
+        }
     }
 
     Ok(())

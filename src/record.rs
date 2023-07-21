@@ -13,7 +13,7 @@ use context::Context;
 use crate::{
     app::context,
     error::{self, Result},
-    time::{ContextTimeZone, NaiveDateOperations},
+    time::{range::DateTimeRange, ContextTimeZone, NaiveDateOperations},
 };
 
 #[derive(Clone)]
@@ -51,7 +51,7 @@ impl<Tz: TimeZone> Entry<Tz> {
         }
     }
 
-    fn get_work_duration(&self) -> Duration {
+    pub fn get_work_duration(&self) -> Duration {
         Duration::milliseconds(self.work_time_millis.into())
     }
 
@@ -60,15 +60,6 @@ impl<Tz: TimeZone> Entry<Tz> {
             .clone()
             .checked_add_signed(self.get_work_duration())
             .ok_or_else(|| error::Main::DateTimeOverflow)
-    }
-
-    fn into_date_pair(self) -> (DateTime<Tz>, DateTime<Tz>)
-    where
-        Tz::Offset: Copy,
-    {
-        let check_out = self.check_in + self.get_work_duration();
-
-        (self.check_in, check_out)
     }
 }
 
@@ -165,16 +156,6 @@ impl<Tz: TimeZone> Record<Tz> {
 
         Ok(buf)
     }
-
-    pub fn sum_datetime_pairs(pairs: Vec<(DateTime<Tz>, DateTime<Tz>)>) -> Duration {
-        let seconds = pairs
-            .into_iter()
-            .map(|(check_in, check_out)| check_out.signed_duration_since(check_in))
-            .map(|duration| duration.num_seconds())
-            .sum::<i64>();
-
-        Duration::seconds(seconds)
-    }
 }
 
 pub struct Iterator<Tz: TimeZone> {
@@ -245,34 +226,30 @@ impl<Tz: ContextTimeZone> Record<Tz> {
     }
 
     pub fn days_time(self, ctx: &context::Context<Tz>, day: NaiveDate) -> Result<Duration> {
-        let date_pairs = self.try_into_cropped_datetime_pairs(
+        let datetime_ranges = self.try_into_cropped_datetime_ranges(
             ctx,
             day.into_day_start(ctx)?,
             day.into_day_end(ctx)?,
         )?;
 
-        Ok(Self::sum_datetime_pairs(date_pairs))
+        Ok(datetime_ranges.into_iter().sum())
     }
 
     pub fn todays_time(self, ctx: &context::Context<Tz>) -> Result<Duration> {
         let now = Local::now();
         let today = now.date_naive();
 
-        let mut date_pairs_today = self
+        let mut datetime_ranges_today = self
             .into_iter()
             .map(|item| {
                 item.into_entry(|| ctx.timezone.now())
-                    .map(Entry::into_date_pair)
+                    .map(DateTimeRange::from)
             })
             .rev()
-            .take_while(|entry| {
-                entry
-                    .iter()
-                    .any(|(_, check_out)| check_out.date_naive() == today)
-            })
+            .take_while(|dtr| dtr.iter().any(|dtr| dtr.end().date_naive() == today))
             .collect::<Result<Vec<_>>>()?;
 
-        let Some((first_check_in, first_check_out)) = date_pairs_today.pop() else {
+        let Some((first_check_in, first_check_out)) = datetime_ranges_today.pop().map(DateTimeRange::into_bounds) else {
             return Ok(Duration::zero());
         };
 
@@ -282,22 +259,22 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             today.into_day_start(ctx)?
         };
 
-        date_pairs_today.push((first_check_in, first_check_out));
+        datetime_ranges_today.push(DateTimeRange::new(first_check_in, first_check_out)?);
 
-        Ok(Self::sum_datetime_pairs(date_pairs_today))
+        Ok(datetime_ranges_today.into_iter().sum())
     }
 
     pub fn total_time(self, ctx: &context::Context<Tz>) -> Result<Duration> {
-        let datetime_pairs = self
+        let datetime_ranges = self
             .into_iter()
             .map(|entry| {
                 entry
                     .into_entry(|| ctx.timezone.now())
-                    .map(Entry::into_date_pair)
+                    .map(DateTimeRange::from)
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Self::sum_datetime_pairs(datetime_pairs))
+        Ok(datetime_ranges.into_iter().sum())
     }
 
     pub fn current_session_time(&self, ctx: &Context<Tz>) -> Option<Duration> {
@@ -305,37 +282,40 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             .map(|sesh| sesh.signed_duration_since(ctx.timezone.now()))
     }
 
-    fn try_into_cropped_datetime_pairs(
+    fn try_into_cropped_datetime_ranges(
         self,
         ctx: &Context<Tz>,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> Result<Vec<(DateTime<Tz>, DateTime<Tz>)>> {
+    ) -> Result<Vec<DateTimeRange<Tz>>> {
         if end <= start {
             return Err(error::Main::RangeStartPosition);
         }
 
-        let mut date_pairs = self
-            .into_iter()
-            .map(|item| {
-                item.into_entry(|| ctx.timezone.now().min(end))
-                    .map(Entry::into_date_pair)
-            })
-            .filter(|entry| {
-                entry.iter().any(|(check_in, check_out)| {
-                    (start <= *check_in && *check_in < end)
-                        || (start <= *check_out && *check_out < end)
+        let mut datetime_ranges =
+            self.into_iter()
+                .map(|item| {
+                    item.into_entry(|| ctx.timezone.now().min(end))
+                        .map(DateTimeRange::from)
                 })
-            })
-            .collect::<Result<VecDeque<_>>>()?;
+                .filter(|entry| {
+                    entry.iter().map(|dtr| dtr.clone().into_bounds()).any(
+                        |(check_in, check_out)| {
+                            (start <= check_in && check_in < end)
+                                || (start <= check_out && check_out < end)
+                        },
+                    )
+                })
+                .collect::<Result<VecDeque<_>>>()?;
 
-        if date_pairs.is_empty() {
+        if datetime_ranges.is_empty() {
             return Ok(vec![]);
         }
 
-        let (first_check_in, first_check_out) = date_pairs
+        let (first_check_in, first_check_out) = datetime_ranges
             .pop_front()
-            .expect("date_pairs must be confirmed to have at least one element");
+            .expect("datetime_ranges must be confirmed to have at least one element")
+            .into_bounds();
 
         let first_check_in = if first_check_in < start {
             start
@@ -343,11 +323,12 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             first_check_in
         };
 
-        date_pairs.push_front((first_check_in, first_check_out));
+        datetime_ranges.push_front(DateTimeRange::new(first_check_in, first_check_out)?);
 
-        let (last_check_in, last_check_out) = date_pairs
+        let (last_check_in, last_check_out) = datetime_ranges
             .pop_back()
-            .expect("date_pairs must be confirmed to have at least one element");
+            .expect("datetime_ranges must be confirmed to have at least one element")
+            .into_bounds();
 
         let last_check_out = if last_check_out > end {
             end
@@ -355,9 +336,9 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             last_check_out
         };
 
-        date_pairs.push_back((last_check_in, last_check_out));
+        datetime_ranges.push_back(DateTimeRange::new(last_check_in, last_check_out)?);
 
-        Ok(date_pairs.into())
+        Ok(datetime_ranges.into())
     }
 }
 

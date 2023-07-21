@@ -1,3 +1,5 @@
+pub mod range;
+
 use std::{
     fmt::{self, Display, Write},
     ops::RangeInclusive,

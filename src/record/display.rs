@@ -1,13 +1,13 @@
 use std::ops::RangeInclusive;
 
-use chrono::{DateTime, NaiveDate};
+use chrono::{DateTime, Duration, NaiveDate};
 use context::Context;
 
 use super::Record;
 use crate::{
     app::context,
     error::Result,
-    time::{self, ContextTimeZone, NaiveDateOperations},
+    time::{self, range::DateTimeRange, ContextTimeZone, NaiveDateOperations},
 };
 
 #[allow(clippy::cast_precision_loss)]
@@ -25,8 +25,8 @@ fn tween_dates<Tz: ContextTimeZone>(range: RangeInclusive<DateTime<Tz>>, pos: Da
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss
 )]
-pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
-    datetime_pairs: Vec<(DateTime<Tz>, DateTime<Tz>)>,
+pub fn paint_datetime_ranges_line<Tz: ContextTimeZone>(
+    datetime_ranges: Vec<DateTimeRange<Tz>>,
     range: RangeInclusive<DateTime<Tz>>,
     width: usize,
     background_shift: bool,
@@ -35,9 +35,9 @@ pub fn paint_datetime_pairs_line<Tz: ContextTimeZone>(
     let range_end = *range.end();
     let mut buf = vec![false; width];
 
-    for (start, end) in datetime_pairs {
-        let start_tween = tween_dates(range_start..=range_end, start);
-        let end_tween = tween_dates(range_start..=range_end, end);
+    for dtr in datetime_ranges {
+        let start_tween = tween_dates(range_start..=range_end, *dtr.start());
+        let end_tween = tween_dates(range_start..=range_end, *dtr.end());
         let till_end = end_tween - start_tween;
         let paint_start = (width as f32 * start_tween).round() as usize;
         let paint_end = (width as f32 * (start_tween + till_end)).round() as usize;
@@ -69,12 +69,12 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
 ) -> Result<()> {
     let range_start = *range.start();
     let range_end = *range.end();
-    let total_datetime_pairs = record.clone().try_into_cropped_datetime_pairs(
+    let total_datetime_ranges = record.clone().try_into_cropped_datetime_ranges(
         ctx,
         range_start.into_day_start(ctx)?,
         range_end.into_day_end(ctx)?,
     )?;
-    let total_duration = Record::sum_datetime_pairs(total_datetime_pairs);
+    let total_duration: chrono::Duration = total_datetime_ranges.into_iter().sum();
     println!(
         "Total time: {} hours, {} minutes",
         total_duration.num_hours(),
@@ -86,16 +86,16 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
         .enumerate()
     {
         let day_span = time::day_timespan(ctx, day)?;
-        let datetime_pairs = record.clone().try_into_cropped_datetime_pairs(
+        let datetime_ranges = record.clone().try_into_cropped_datetime_ranges(
             ctx,
             *day_span.start(),
             *day_span.end(),
         )?;
-        let duration = Record::sum_datetime_pairs(datetime_pairs.clone());
+        let duration: Duration = datetime_ranges.clone().into_iter().sum();
         println!(
             "{} {} {}",
             day.format("%F"),
-            paint_datetime_pairs_line(datetime_pairs, day_span, width, i % 2 != 0),
+            paint_datetime_ranges_line(datetime_ranges, day_span, width, i % 2 != 0),
             if duration.is_zero() {
                 String::new()
             } else {
@@ -112,7 +112,7 @@ mod tests {
     use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 
     use super::Record;
-    use crate::{app::Context, record::Entry};
+    use crate::{app::Context, record::Entry, time::range::DateTimeRange};
 
     fn tz() -> FixedOffset {
         FixedOffset::east_opt(0).unwrap()
@@ -142,15 +142,15 @@ mod tests {
             .checked_sub_signed(chrono::Duration::milliseconds(1))
             .unwrap();
 
-        let datetime_pairs = record
-            .try_into_cropped_datetime_pairs(&ctx, today_start, today_end)
+        let datetime_ranges = record
+            .try_into_cropped_datetime_ranges(&ctx, today_start, today_end)
             .unwrap();
 
-        super::paint_datetime_pairs_line(datetime_pairs, today_start..=today_end, width, false)
+        super::paint_datetime_ranges_line(datetime_ranges, today_start..=today_end, width, false)
     }
 
     #[test]
-    fn paint_datetime_pairs_line() {
+    fn paint_datetime_ranges_line() {
         let line = line_from_record(
             Record {
                 entries: vec![entry(0, 0, 12, 0)],
@@ -158,11 +158,11 @@ mod tests {
             },
             10,
         );
-        assert_eq!("█████░▒░▒░", line);
+        assert_eq!("▓▓▓▓▓░▒░▒░", line);
     }
 
     #[test]
-    fn paint_datetime_pairs_line_middle() {
+    fn paint_datetime_ranges_line_middle() {
         let line = line_from_record(
             Record {
                 entries: vec![entry(6, 0, 18, 0)],
@@ -170,11 +170,11 @@ mod tests {
             },
             10,
         );
-        assert_eq!("▒░▒█████▒░", line);
+        assert_eq!("▒░▒▓▓▓▓▓▒░", line);
     }
 
     #[test]
-    fn paint_datetime_pairs_line_end() {
+    fn paint_datetime_ranges_line_end() {
         let line = line_from_record(
             Record {
                 entries: vec![entry(12, 0, 23, 59)],
@@ -182,11 +182,11 @@ mod tests {
             },
             10,
         );
-        assert_eq!("▒░▒░▒█████", line);
+        assert_eq!("▒░▒░▒▓▓▓▓▓", line);
     }
 
     #[test]
-    fn paint_datetime_pairs_line_long() {
+    fn paint_datetime_ranges_line_long() {
         let line = line_from_record(
             Record {
                 entries: vec![
@@ -201,31 +201,31 @@ mod tests {
             },
             24,
         );
-        assert_eq!("█░█░▒██░▒░███████░▒░▒░▒█", line);
+        assert_eq!("▓░▓░▒▓▓░▒░▓▓▓▓▓▓▓░▒░▒░▒▓", line);
     }
 
     #[test]
     fn paint_full() {
-        let line = super::paint_datetime_pairs_line(
-            vec![(datetime(0, 0), datetime(23, 59))],
+        let line = super::paint_datetime_ranges_line(
+            vec![DateTimeRange::new(datetime(0, 0), datetime(23, 59)).unwrap()],
             datetime(0, 0)..=datetime(23, 59),
             24,
             false,
         );
-        assert_eq!("████████████████████████", line);
+        assert_eq!("▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓", line);
     }
 
     #[test]
     fn paint_both_ends() {
-        let line = super::paint_datetime_pairs_line(
+        let line = super::paint_datetime_ranges_line(
             vec![
-                (datetime(0, 0), datetime(6, 0)),
-                (datetime(18, 0), datetime(23, 59)),
+                DateTimeRange::new(datetime(0, 0), datetime(6, 0)).unwrap(),
+                DateTimeRange::new(datetime(18, 0), datetime(23, 59)).unwrap(),
             ],
             datetime(0, 0)..=datetime(23, 59),
             24,
             false,
         );
-        assert_eq!("██████▒░▒░▒░▒░▒░▒░██████", line);
+        assert_eq!("▓▓▓▓▓▓▒░▒░▒░▒░▒░▒░▓▓▓▓▓▓", line);
     }
 }

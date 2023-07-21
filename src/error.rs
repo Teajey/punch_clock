@@ -17,6 +17,9 @@ pub enum Main {
     #[error("There was an attempt to create an entry with check-out before check-in.")]
     CheckOutBeforeCheckIn,
 
+    #[error("Attempted to create a datetime range with the end before the start. start = {start} end = {end}")]
+    DateTimeRangeEndBeforeStart { start: String, end: String },
+
     #[error("An entry has an invalid number of tokens")]
     EntryIncorrectNumberOfTokens,
 

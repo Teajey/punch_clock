@@ -25,7 +25,7 @@ where
 
 impl<Tz: TimeZone> DateTimeRange<Tz>
 where
-    Tz::Offset: Display + Clone,
+    Tz::Offset: Display,
 {
     pub fn new(start: DateTime<Tz>, end: DateTime<Tz>) -> Result<Self> {
         if start >= end {
@@ -36,18 +36,11 @@ where
         }
         Ok(Self(start..=end))
     }
+}
 
+impl<Tz: TimeZone> DateTimeRange<Tz> {
     pub fn into_bounds(self) -> (DateTime<Tz>, DateTime<Tz>) {
         self.0.into_inner()
-    }
-
-    pub fn as_bounds(&self) -> (DateTime<Tz>, DateTime<Tz>)
-    where
-        Tz::Offset: Copy,
-    {
-        let start = *self.0.start();
-        let end = *self.0.end();
-        (start, end)
     }
 
     pub fn start(&self) -> &DateTime<Tz> {
@@ -59,12 +52,9 @@ where
     }
 }
 
-impl<Tz: TimeZone> From<Entry<Tz>> for DateTimeRange<Tz>
-where
-    Tz::Offset: Copy,
-{
+impl<Tz: TimeZone> From<Entry<Tz>> for DateTimeRange<Tz> {
     fn from(entry: Entry<Tz>) -> Self {
-        let check_out = entry.check_in + entry.get_work_duration();
+        let check_out = entry.check_in.clone() + entry.get_work_duration();
 
         Self(entry.check_in..=check_out)
     }

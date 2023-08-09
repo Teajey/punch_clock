@@ -16,6 +16,7 @@ use crate::{
     time::{range::DateTimeRange, ContextTimeZone, NaiveDateOperations},
 };
 
+// FIXME: I'm thinking Entry ought to just be completely replaced by DateTimeRange
 #[derive(Clone)]
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct Entry<Tz: TimeZone> {
@@ -56,6 +57,7 @@ impl<Tz: TimeZone> Entry<Tz> {
     }
 
     pub fn get_check_out(&self) -> Result<DateTime<Tz>> {
+        // FIXME: Why not just `self.check_in + self.get_work_duration()`?
         self.check_in
             .clone()
             .checked_add_signed(self.get_work_duration())
@@ -118,6 +120,25 @@ impl<Tz: TimeZone> Record<Tz> {
             entries,
             current_session: current_session.map(|cs| cs.with_timezone(tz)),
         }
+    }
+
+    pub fn clone_last_datetime(&self) -> Result<Option<DateTime<Tz>>> {
+        match self.get_latest() {
+            Latest::Entry(entry) => Some(entry.get_check_out()).transpose(),
+            Latest::Current(current) => Ok(Some(current.clone())),
+            Latest::None => Ok(None),
+        }
+    }
+
+    pub fn pop(&mut self) -> Option<DateTime<Tz>> {
+        self.current_session.take().or_else(|| {
+            self.entries.pop().map(|entry| {
+                let (start, end) = DateTimeRange::from(entry).into_bounds();
+                // Something about mutating self inside this closure feels very wrong...
+                self.current_session = Some(start);
+                end
+            })
+        })
     }
 
     pub fn get_current_session(&self) -> Option<&DateTime<Tz>> {

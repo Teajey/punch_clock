@@ -31,4 +31,5 @@ pub enum Action {
         #[arg(long, default_value_t = 48)]
         width: usize,
     },
+    Undo,
 }

@@ -4,6 +4,7 @@ mod enter;
 mod exit;
 mod stats;
 mod status;
+mod undo;
 
 use std::fs;
 
@@ -43,7 +44,7 @@ pub fn run<Tz: ContextTimeZone>(
         }
         Action::Stats { day } => {
             let date = day.as_ref().map(|Day(date)| *date);
-            stats::run(ctx, record.clone().with_timezone(&ctx.timezone), date)?;
+            stats::run(ctx, record.with_timezone(&ctx.timezone), date)?;
         }
         Action::Calendar {
             from: Day(from),
@@ -53,6 +54,10 @@ pub fn run<Tz: ContextTimeZone>(
             record
                 .with_timezone(&ctx.timezone)
                 .paint_calendar(ctx, *from..=*to, *width)?;
+        }
+        Action::Undo => {
+            undo::run(&mut record)?;
+            fs::write(".punch_clock/record", record.serialize()?)?;
         }
     };
 

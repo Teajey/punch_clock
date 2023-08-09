@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.26"
 clap = { version = "4.3.0", features = ["derive"] }
+dialoguer = { version = "0.10.4", default-features = false }
 thiserror = "1.0.40"
 
 [dev-dependencies]

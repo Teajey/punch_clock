@@ -26,8 +26,8 @@ pub enum Action {
         day: Option<day::Day>,
     },
     Calendar {
-        from: day::Day,
-        to: day::Day,
+        from: Option<day::Day>,
+        to: Option<day::Day>,
         #[arg(long, default_value_t = 48)]
         width: usize,
     },

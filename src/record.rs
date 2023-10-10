@@ -376,19 +376,20 @@ impl Record<Utc> {
         Ok(now)
     }
 
-    pub fn clock_out(&mut self) -> Result<Duration> {
+    pub fn clock_out(&mut self) -> Result<(DateTime<Utc>, Duration)> {
         let Some(current_session) = self.current_session else {
             return Err(error::Main::NotClockedIn);
         };
 
-        let since = current_session.signed_duration_since(Utc::now());
+        let now = Utc::now();
+        let since = current_session.signed_duration_since(now);
 
         self.entries
             .push(Entry::try_new(current_session, Utc::now())?);
 
         self.current_session = None;
 
-        Ok(since)
+        Ok((now, since))
     }
 
     pub fn load() -> Result<Option<Self>> {

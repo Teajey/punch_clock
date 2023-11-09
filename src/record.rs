@@ -22,10 +22,15 @@ use crate::{
 pub struct Entry<Tz: TimeZone> {
     pub check_in: DateTime<Tz>,
     work_time_millis: u32,
+    pub comment: Option<String>,
 }
 
 impl<Tz: TimeZone> Entry<Tz> {
-    pub fn try_new(check_in: DateTime<Tz>, check_out: DateTime<Tz>) -> Result<Self> {
+    pub fn try_new(
+        check_in: DateTime<Tz>,
+        check_out: DateTime<Tz>,
+        comment: Option<String>,
+    ) -> Result<Self> {
         if check_out < check_in {
             return Err(error::Main::CheckOutBeforeCheckIn);
         }
@@ -38,6 +43,7 @@ impl<Tz: TimeZone> Entry<Tz> {
         Ok(Self {
             check_in,
             work_time_millis,
+            comment,
         })
     }
 
@@ -45,10 +51,12 @@ impl<Tz: TimeZone> Entry<Tz> {
         let Self {
             check_in,
             work_time_millis,
+            comment,
         } = self;
         Entry {
             check_in: check_in.with_timezone(tz),
             work_time_millis,
+            comment,
         }
     }
 
@@ -66,11 +74,15 @@ impl<Tz: TimeZone> Entry<Tz> {
 }
 
 impl Entry<FixedOffset> {
-    fn from_tokens(check_in: &str, check_out: &str) -> Result<Entry<FixedOffset>> {
+    fn from_tokens(
+        check_in: &str,
+        check_out: &str,
+        comment: Option<String>,
+    ) -> Result<Entry<FixedOffset>> {
         let check_in = DateTime::parse_from_rfc3339(check_in)?;
         let check_out = DateTime::parse_from_rfc3339(check_out)?;
 
-        Entry::try_new(check_in, check_out)
+        Entry::try_new(check_in, check_out, comment)
     }
 }
 
@@ -85,11 +97,16 @@ impl TryFrom<&str> for Entry<FixedOffset> {
     type Error = error::Main;
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        let [check_in, check_out] = split_sparse_tokens(value, ' ')[..] else {
-            return Err(error::Main::EntryIncorrectNumberOfTokens);
+        let parts = split_sparse_tokens(value, ' ');
+        let (check_in, check_out, comment) = match parts.as_slice() {
+            [check_in, check_out] => (check_in, check_out, None),
+            [check_in, check_out, comment @ ..] => (check_in, check_out, Some(comment.join(" "))),
+            _ => {
+                return Err(error::Main::EntryIncorrectNumberOfTokens);
+            }
         };
 
-        Self::from_tokens(check_in, check_out)
+        Self::from_tokens(check_in, check_out, comment)
     }
 }
 
@@ -162,13 +179,22 @@ impl<Tz: TimeZone> Record<Tz> {
         Tz::Offset: Display,
     {
         let mut buf = String::new();
-        for entry in &self.entries {
-            writeln!(
+        for entry @ Entry {
+            check_in,
+            work_time_millis: _,
+            comment,
+        } in &self.entries
+        {
+            write!(
                 buf,
                 "{:<32} {:<32}",
-                entry.check_in.to_rfc3339(),
+                check_in.to_rfc3339(),
                 entry.get_check_out()?.to_rfc3339(),
             )?;
+            if let Some(comment) = comment {
+                write!(buf, " {comment}")?;
+            }
+            writeln!(buf)?;
         }
 
         if let Some(current_session) = self.current_session.clone() {
@@ -197,7 +223,7 @@ impl<Tz: TimeZone> Item<Tz> {
     {
         match self {
             Item::Entry(entry) => Ok(entry),
-            Item::CurrentSession(current_session) => Entry::try_new(current_session, end()),
+            Item::CurrentSession(current_session) => Entry::try_new(current_session, end(), None),
         }
     }
 }
@@ -270,7 +296,9 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             .take_while(|dtr| dtr.iter().any(|dtr| dtr.end().date_naive() == today))
             .collect::<Result<Vec<_>>>()?;
 
-        let Some((first_check_in, first_check_out)) = datetime_ranges_today.pop().map(DateTimeRange::into_bounds) else {
+        let Some((first_check_in, first_check_out)) =
+            datetime_ranges_today.pop().map(DateTimeRange::into_bounds)
+        else {
             return Ok(Duration::zero());
         };
 
@@ -376,7 +404,7 @@ impl Record<Utc> {
         Ok(now)
     }
 
-    pub fn clock_out(&mut self) -> Result<(DateTime<Utc>, Duration)> {
+    pub fn clock_out(&mut self, comment: Option<String>) -> Result<(DateTime<Utc>, Duration)> {
         let Some(current_session) = self.current_session else {
             return Err(error::Main::NotClockedIn);
         };
@@ -385,7 +413,7 @@ impl Record<Utc> {
         let since = current_session.signed_duration_since(now);
 
         self.entries
-            .push(Entry::try_new(current_session, Utc::now())?);
+            .push(Entry::try_new(current_session, Utc::now(), comment)?);
 
         self.current_session = None;
 
@@ -434,12 +462,19 @@ impl TryFrom<&str> for Record<FixedOffset> {
             .collect::<Result<Vec<_>>>()?;
 
         if let Some(last_line) = last_line {
-            match split_sparse_tokens(last_line, ' ')[..] {
+            match split_sparse_tokens(last_line, ' ').as_slice() {
                 [check_in, check_out] => {
-                    entries.push(Entry::from_tokens(check_in, check_out)?);
+                    entries.push(Entry::from_tokens(check_in, check_out, None)?);
                 }
                 [check_in] => {
                     current_session = Some(DateTime::parse_from_rfc3339(check_in)?);
+                }
+                [check_in, check_out, comment @ ..] => {
+                    entries.push(Entry::from_tokens(
+                        check_in,
+                        check_out,
+                        Some(comment.join(" ")),
+                    )?);
                 }
                 _ => {
                     return Err(error::Main::EntryIncorrectNumberOfTokens);
@@ -478,11 +513,13 @@ mod test {
             ))
     }
 
+    const RECORD_STR: &str = "2023-01-01T00:00:00+00:00        2023-01-01T01:00:00+00:00       
+2023-01-01T02:00:00+00:00        2023-01-01T03:00:00+00:00        This is a comment!
+2023-01-01T04:00:00+00:00
+";
+
     fn get_record() -> Record<FixedOffset> {
-        let rec_file = "2023-01-01T00:00:00.000000+00:00 2023-01-01T01:00:00.000000+00:00
-2023-01-01T02:00:00.000000+00:00 2023-01-01T03:00:00.000000+00:00
-2023-01-01T04:00:00.000000+00:00";
-        Record::try_from(rec_file).unwrap()
+        Record::try_from(RECORD_STR).unwrap()
     }
 
     #[test]
@@ -494,11 +531,13 @@ mod test {
             vec![
                 record::Item::Entry(Entry {
                     check_in: datetime_hm(0, 0),
-                    work_time_millis: 3_600_000
+                    work_time_millis: 3_600_000,
+                    comment: None,
                 }),
                 record::Item::Entry(Entry {
                     check_in: datetime_hm(2, 0),
-                    work_time_millis: 3_600_000
+                    work_time_millis: 3_600_000,
+                    comment: Some("This is a comment!".to_owned()),
                 }),
                 record::Item::CurrentSession(datetime_hm(4, 0)),
             ],
@@ -516,11 +555,13 @@ mod test {
                 record::Item::CurrentSession(datetime_hm(4, 0)),
                 record::Item::Entry(Entry {
                     check_in: datetime_hm(2, 0),
-                    work_time_millis: 3_600_000
+                    work_time_millis: 3_600_000,
+                    comment: Some("This is a comment!".to_owned()),
                 }),
                 record::Item::Entry(Entry {
                     check_in: datetime_hm(0, 0),
-                    work_time_millis: 3_600_000
+                    work_time_millis: 3_600_000,
+                    comment: None,
                 }),
             ],
             rec_vec
@@ -576,5 +617,13 @@ mod test {
             .unwrap()
             .with_timezone(&ctx.timezone);
         paint_day_range(&ctx, &rec, date_md(7, 10)..=date_md(7, 12), 24).unwrap();
+    }
+
+    #[test]
+    fn read_write_read_integrity() {
+        let rec = Record::try_from(RECORD_STR).unwrap();
+        let written = rec.serialize().unwrap();
+
+        assert_eq!(RECORD_STR, &written);
     }
 }

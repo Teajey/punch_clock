@@ -14,11 +14,15 @@ where
     for entry in record.get_entries() {
         let local_check_in_date = &entry.check_in;
         let local_check_out_date = entry.get_check_out()?;
-        println!(
+        print!(
             "| {:<40} | {:<40} |",
             local_check_in_date.format(DATE_FORMAT),
             local_check_out_date.format(DATE_FORMAT),
         );
+        if let Some(comment) = &entry.comment {
+            print!(" {comment}");
+        }
+        println!();
     }
 
     if let Some(current_session) = record.get_current_session() {

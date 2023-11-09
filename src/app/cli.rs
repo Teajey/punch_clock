@@ -18,7 +18,9 @@ pub struct Base {
 #[derive(Subcommand)]
 pub enum Action {
     In,
-    Out,
+    Out {
+        comment: Option<String>,
+    },
     Status,
     Dump,
     Edit,

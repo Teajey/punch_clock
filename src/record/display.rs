@@ -131,7 +131,7 @@ mod tests {
     }
 
     fn entry(hour1: u32, min1: u32, hour2: u32, min2: u32) -> Entry<FixedOffset> {
-        Entry::try_new(datetime(hour1, min1), datetime(hour2, min2)).unwrap()
+        Entry::try_new(datetime(hour1, min1), datetime(hour2, min2), None).unwrap()
     }
 
     fn line_from_record(record: Record<FixedOffset>, width: usize) -> String {

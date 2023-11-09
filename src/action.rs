@@ -30,8 +30,8 @@ pub fn run<Tz: ContextTimeZone>(
             enter::run(&mut record)?;
             fs::write(".punch_clock/record", record.serialize()?)?;
         }
-        Action::Out => {
-            exit::run(&mut record)?;
+        Action::Out { comment } => {
+            exit::run(&mut record, comment.as_deref().map(ToOwned::to_owned))?;
             fs::write(".punch_clock/record", record.serialize()?)?;
         }
         Action::Status => status::run(&record)?,

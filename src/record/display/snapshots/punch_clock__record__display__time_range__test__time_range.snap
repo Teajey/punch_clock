@@ -1,0 +1,11 @@
+---
+source: src/record/display/time_range.rs
+expression: "tr.print(4, \"%F\").unwrap()"
+---
+2023-01-01 ▒░▒░
+2023-01-01 ░▒░▒
+2023-01-02 ▓▓▓▓
+2023-01-02 ▓▓▓▓ Today was a good day.
+2023-01-03 ▒░▒░
+2023-01-03 ░▒░▒
+

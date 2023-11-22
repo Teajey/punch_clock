@@ -34,4 +34,9 @@ pub enum Action {
         width: usize,
     },
     Undo,
+    Day {
+        date: Option<day::Day>,
+        #[arg(long, default_value_t = 1)]
+        scale: u16,
+    },
 }

@@ -8,7 +8,7 @@ mod undo;
 
 use std::fs;
 
-use chrono::Utc;
+use chrono::{Duration, NaiveTime, Utc};
 
 use crate::{
     app::{
@@ -16,7 +16,7 @@ use crate::{
         context::Context,
     },
     error::{self, Result},
-    record::Record,
+    record::{self, Record},
     time::ContextTimeZone,
 };
 
@@ -72,6 +72,38 @@ pub fn run<Tz: ContextTimeZone>(
         Action::Undo => {
             undo::run(&mut record)?;
             fs::write(".punch_clock/record", record.serialize()?)?;
+        }
+        Action::Day { date, scale } => {
+            let record = record.with_timezone(&ctx.timezone);
+            let date = date.as_ref().map_or_else(
+                || {
+                    ctx.timezone
+                        .now()
+                        .date_naive()
+                        .and_time(NaiveTime::default())
+                        .and_local_timezone(ctx.timezone)
+                        .unwrap() // *shudder* I think I can safely assume this won't fail
+                },
+                |d| {
+                    d.0.and_time(NaiveTime::default())
+                        .and_local_timezone(ctx.timezone)
+                        .unwrap()
+                },
+            );
+            let next_date = date + Duration::days(1);
+            let total_datetime_ranges = record
+                .clone()
+                .try_into_cropped_datetime_ranges(ctx, date, next_date)?;
+            let total_duration: chrono::Duration = total_datetime_ranges.into_iter().sum();
+            println!(
+                "Total time: {} hours, {} minutes",
+                total_duration.num_hours(),
+                total_duration.num_minutes() % 60
+            );
+
+            let tr =
+                record::display::time_range::time_range(&record, date..=next_date, 24 * scale)?;
+            println!("{}", tr.print(6, "%R")?);
         }
     };
 

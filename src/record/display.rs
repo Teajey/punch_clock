@@ -1,3 +1,5 @@
+pub mod time_range;
+
 use std::ops::RangeInclusive;
 
 use chrono::{DateTime, Duration, NaiveDate};

@@ -1,4 +1,4 @@
-mod display;
+pub mod display;
 
 use std::{
     collections::VecDeque,
@@ -331,8 +331,9 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             .map(|sesh| sesh.signed_duration_since(ctx.timezone.now()))
     }
 
-    fn try_into_cropped_datetime_ranges(
+    pub fn try_into_cropped_datetime_ranges(
         self,
+        // FIXME: The entire context is not needed
         ctx: &Context<Tz>,
         start: DateTime<Tz>,
         end: DateTime<Tz>,

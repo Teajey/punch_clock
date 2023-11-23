@@ -1,8 +1,7 @@
 use std::fmt::Write;
 use std::ops::RangeInclusive;
 
-use chrono::{DateTime};
-
+use chrono::DateTime;
 
 use crate::{
     error::Result,
@@ -17,11 +16,17 @@ mod printable {
 
     use chrono::NaiveDateTime;
 
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum Comment {
+        Single(String),
+        Multi(u32),
+    }
+
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     pub enum Info {
         #[default]
         Empty,
-        Session(Option<String>),
+        Session(Option<Comment>),
     }
 
     impl Info {
@@ -65,8 +70,14 @@ mod printable {
                 self.date.format(date_format),
                 self.info.print(width, bg_toggle)?
             )?;
-            if let Info::Session(Some(comment)) = &self.info {
-                write!(buf, " {comment}")?;
+            match &self.info {
+                Info::Empty | Info::Session(None) => (),
+                Info::Session(Some(Comment::Single(comment))) => {
+                    write!(buf, " {comment}")?;
+                }
+                Info::Session(Some(Comment::Multi(count))) => {
+                    write!(buf, " [{count} overlapping comments]")?;
+                }
             }
             Ok(buf)
         }
@@ -141,13 +152,37 @@ pub fn time_range<Tz: ContextTimeZone>(
             (
                 Some(Line {
                     date: _,
-                    info: Info::Session(session_comment),
+                    info: Info::Session(session_comment @ None),
                 }),
                 Some(comment),
             ) => {
-                let _ = session_comment.insert(comment.clone());
+                *session_comment = Some(printable::Comment::Single(comment.clone()));
             }
-            (Some(_), Some(_)) => unreachable!("The last session line must have Info::Session!"),
+            (
+                Some(Line {
+                    date: _,
+                    info: Info::Session(Some(session_comment @ printable::Comment::Single(_))),
+                }),
+                Some(_),
+            ) => {
+                *session_comment = printable::Comment::Multi(2);
+            }
+            (
+                Some(Line {
+                    date: _,
+                    info: Info::Session(Some(printable::Comment::Multi(count))),
+                }),
+                Some(_),
+            ) => {
+                *count += 1;
+            }
+            (
+                Some(Line {
+                    date: _,
+                    info: Info::Empty,
+                }),
+                Some(_),
+            ) => unreachable!("The last session line must have Info::Session!"),
             _ => (),
         }
     }
@@ -160,7 +195,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::record::{
-        display::time_range::printable::{Info, Line},
+        display::time_range::printable::{Comment, Info, Line},
         Record,
     };
 
@@ -215,7 +250,7 @@ mod test {
             },
             Line {
                 date: naive!(2023, 1, 2, 12, 0, 0),
-                info: Info::Session(Some(s!("Today was a good day."))),
+                info: Info::Session(Some(Comment::Single(s!("Today was a good day.")))),
             },
             Line {
                 date: naive!(2023, 1, 3, 0, 0, 0),
@@ -240,5 +275,45 @@ mod test {
         let record = Record::try_from(record_file).unwrap();
         let tr = super::time_range(&record, dt!(2023, 11, 2)..=dt!(2023, 11, 3), 24).unwrap();
         insta::assert_display_snapshot!(tr.print(6, "%R").unwrap());
+    }
+
+    #[test]
+    fn time_range_overlapping_comments() {
+        let record_file =
+            "2023-01-01T12:01:00.000000+00:00 2023-01-01T12:02:00.000000+00:00 Good session.
+2023-01-01T12:04:00.000000+00:00 2023-01-01T12:05:00.000000+00:00 Even better session!
+2023-01-02T12:01:00.000000+00:00 2023-01-02T12:02:00.000000+00:00 Beeble weeble dee 1.
+2023-01-02T12:03:00.000000+00:00 2023-01-02T12:04:00.000000+00:00 Beeble weeble dee 2.
+2023-01-02T12:05:00.000000+00:00 2023-01-02T12:06:00.000000+00:00 Beeble weeble dee 3.
+";
+        let record = Record::try_from(record_file).unwrap();
+        let tr = super::time_range(&record, dt!(2023, 1, 1)..=dt!(2023, 1, 4), 6).unwrap();
+        let expected = vec![
+            Line {
+                date: naive!(2023, 1, 1, 0, 0, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2023, 1, 1, 12, 0, 0),
+                info: Info::Session(Some(Comment::Multi(2))),
+            },
+            Line {
+                date: naive!(2023, 1, 2, 0, 0, 0),
+                info: Info::Session(None),
+            },
+            Line {
+                date: naive!(2023, 1, 2, 12, 0, 0),
+                info: Info::Session(Some(Comment::Multi(3))),
+            },
+            Line {
+                date: naive!(2023, 1, 3, 0, 0, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2023, 1, 3, 12, 0, 0),
+                info: Info::Empty,
+            },
+        ];
+        assert_eq!(expected, tr.0);
     }
 }

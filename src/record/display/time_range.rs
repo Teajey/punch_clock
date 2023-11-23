@@ -16,17 +16,15 @@ mod printable {
 
     use chrono::NaiveDateTime;
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum Comment {
-        Single(String),
-        Multi(u32),
-    }
-
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     pub enum Info {
         #[default]
         Empty,
-        Session(Option<Comment>),
+        SessionSpan,
+        SessionStart(NaiveDateTime, Option<String>),
+        SessionEnd(NaiveDateTime, Option<String>),
+        SessionWhole(NaiveDateTime, NaiveDateTime, Option<String>, Option<String>),
+        Multi(u32),
     }
 
     impl Info {
@@ -40,7 +38,7 @@ mod printable {
                         write!(buf, "{blip}")?;
                     }
                 }
-                Info::Session(_) => {
+                _ => {
                     for _ in 0..width {
                         write!(buf, "▓")?;
                     }
@@ -71,12 +69,44 @@ mod printable {
                 self.info.print(width, bg_toggle)?
             )?;
             match &self.info {
-                Info::Empty | Info::Session(None) => (),
-                Info::Session(Some(Comment::Single(comment))) => {
-                    write!(buf, " {comment}")?;
+                Info::Empty | Info::SessionSpan => (),
+                Info::SessionStart(dt, comment) => {
+                    write!(buf, " In @ {}", dt.format(date_format))?;
+                    if let Some(comment) = comment {
+                        write!(buf, " {comment:?}")?;
+                    }
                 }
-                Info::Session(Some(Comment::Multi(count))) => {
-                    write!(buf, " [{count} overlapping comments]")?;
+                Info::SessionEnd(dt, comment) => {
+                    write!(buf, " Out @ {}", dt.format(date_format))?;
+                    if let Some(comment) = comment {
+                        write!(buf, " {comment:?}")?;
+                    }
+                }
+                Info::SessionWhole(start_dt, end_dt, start_comment, end_comment) => {
+                    let star_if = |c: Option<&str>| -> &str {
+                        if c.is_some() {
+                            "*"
+                        } else {
+                            ""
+                        }
+                    };
+                    write!(
+                        buf,
+                        " {}{} -> {}{}",
+                        start_dt.format(date_format),
+                        star_if(start_comment.as_deref()),
+                        end_dt.format(date_format),
+                        star_if(end_comment.as_deref())
+                    )?;
+                    match (start_comment, end_comment) {
+                        (None, Some(comment)) | (Some(comment), None) => {
+                            write!(buf, " *{comment:?}")?;
+                        }
+                        _ => (),
+                    }
+                }
+                Info::Multi(count) => {
+                    write!(buf, " [{count} transitions overlapping]")?;
                 }
             }
             Ok(buf)
@@ -132,7 +162,7 @@ pub fn time_range<Tz: ContextTimeZone>(
         if check_in > range_end {
             break;
         }
-        // let mut comment_printed = false;
+        let mut first_session_line_printed = false;
         let mut last_session_line = None;
         for (i, line) in lines.iter_mut().enumerate() {
             let point_start = points[i];
@@ -145,48 +175,51 @@ pub fn time_range<Tz: ContextTimeZone>(
                 //     }
                 //     _ => None,
                 // };
-                if matches!(line.info, Info::Empty) {
-                    line.info = Info::Session(None);
+                line.info = match line.info {
+                    Info::Empty if first_session_line_printed => Info::SessionSpan,
+                    Info::Empty => Info::SessionStart(check_in.naive_local(), None),
+                    Info::SessionSpan => {
+                        unreachable!("There shouldn't ever be more than one session here.")
+                    }
+                    Info::SessionStart(_, _) | Info::SessionEnd(_, _) => Info::Multi(2),
+                    Info::SessionWhole(_, _, _, _) => Info::Multi(3),
+                    Info::Multi(count) => Info::Multi(count + 1),
+                };
+                if !matches!(line.info, Info::Empty) {
+                    first_session_line_printed = true;
                 }
+                // if first_session_line_printed
+                // if matches!(line.info, Info::Empty) {
+                //     line.info = Info::Session(None);
+                // }
+
                 last_session_line = Some(line);
             }
         }
-        match (last_session_line, &entry.comment) {
-            (
-                Some(Line {
-                    date: _,
-                    info: Info::Session(session_comment @ None),
-                }),
-                Some(comment),
-            ) => {
-                *session_comment = Some(printable::Comment::Single(comment.clone()));
+        if let Some(line) = last_session_line {
+            match (&mut line.info, entry.comment.as_ref()) {
+                (Info::SessionSpan, comment) => {
+                    line.info = Info::SessionEnd(check_out.naive_local(), comment.cloned());
+                }
+                (Info::SessionEnd(_, session_comment @ None), comment @ Some(_)) => {
+                    *session_comment = comment.cloned();
+                }
+                (Info::SessionStart(start_dt, start_comment), end_comment) => {
+                    line.info = Info::SessionWhole(
+                        *start_dt,
+                        check_out.naive_local(),
+                        start_comment.as_ref().cloned(),
+                        end_comment.cloned(),
+                    );
+                }
+                (Info::SessionEnd(_, _) | Info::SessionWhole(_, _, _, _), _) => unreachable!(
+                    "Not expecting the end of a session to encounter another complete session"
+                ),
+                (Info::Multi(count), _) => {
+                    *count += 1;
+                }
+                (Info::Empty, _) => (),
             }
-            (
-                Some(Line {
-                    date: _,
-                    info: Info::Session(Some(session_comment @ printable::Comment::Single(_))),
-                }),
-                Some(_),
-            ) => {
-                *session_comment = printable::Comment::Multi(2);
-            }
-            (
-                Some(Line {
-                    date: _,
-                    info: Info::Session(Some(printable::Comment::Multi(count))),
-                }),
-                Some(_),
-            ) => {
-                *count += 1;
-            }
-            (
-                Some(Line {
-                    date: _,
-                    info: Info::Empty,
-                }),
-                Some(_),
-            ) => unreachable!("The last session line must have Info::Session!"),
-            _ => (),
         }
     }
     Ok(TimeRange(lines))
@@ -198,7 +231,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::record::{
-        display::time_range::printable::{Comment, Info, Line},
+        display::time_range::printable::{Info, Line},
         Record,
     };
 
@@ -219,10 +252,10 @@ mod test {
     }
 
     macro_rules! naive {
-        ($y:literal, $m:literal, $d:literal, $h:literal, $mi:literal, $s:literal) => {
+        ($y:literal, $m:literal, $d:literal, $h:literal, $mi:literal) => {
             NaiveDateTime::new(
                 NaiveDate::from_ymd_opt($y, $m, $d).unwrap(),
-                NaiveTime::from_hms_opt($h, $mi, $s).unwrap(),
+                NaiveTime::from_hms_opt($h, $mi, 0).unwrap(),
             )
         };
     }
@@ -241,27 +274,27 @@ mod test {
         eprintln!("{}", tr.print(4, "%F").unwrap());
         let expected = vec![
             Line {
-                date: naive!(2023, 1, 1, 0, 0, 0),
+                date: naive!(2023, 1, 1, 0, 0),
                 info: Info::Empty,
             },
             Line {
-                date: naive!(2023, 1, 1, 12, 0, 0),
+                date: naive!(2023, 1, 1, 12, 0),
                 info: Info::Empty,
             },
             Line {
-                date: naive!(2023, 1, 2, 0, 0, 0),
-                info: Info::Session(None),
+                date: naive!(2023, 1, 2, 0, 0),
+                info: Info::SessionStart(naive!(2023, 1, 2, 0, 0), None),
             },
             Line {
-                date: naive!(2023, 1, 2, 12, 0, 0),
-                info: Info::Session(Some(Comment::Single(s!("Today was a good day.")))),
+                date: naive!(2023, 1, 2, 12, 0),
+                info: Info::SessionEnd(naive!(2023, 1, 3, 0, 0), Some(s!("Today was a good day."))),
             },
             Line {
-                date: naive!(2023, 1, 3, 0, 0, 0),
+                date: naive!(2023, 1, 3, 0, 0),
                 info: Info::Empty,
             },
             Line {
-                date: naive!(2023, 1, 3, 12, 0, 0),
+                date: naive!(2023, 1, 3, 12, 0),
                 info: Info::Empty,
             },
         ];
@@ -294,27 +327,27 @@ mod test {
         eprintln!("{}", tr.print(6, "%x %X").unwrap());
         let expected = vec![
             Line {
-                date: naive!(2023, 1, 1, 0, 0, 0),
+                date: naive!(2023, 1, 1, 0, 0),
                 info: Info::Empty,
             },
             Line {
-                date: naive!(2023, 1, 1, 12, 0, 0),
-                info: Info::Session(Some(Comment::Multi(2))),
+                date: naive!(2023, 1, 1, 12, 0),
+                info: Info::Multi(4),
             },
             Line {
-                date: naive!(2023, 1, 2, 0, 0, 0),
+                date: naive!(2023, 1, 2, 0, 0),
                 info: Info::Empty,
             },
             Line {
-                date: naive!(2023, 1, 2, 12, 0, 0),
-                info: Info::Session(Some(Comment::Multi(3))),
+                date: naive!(2023, 1, 2, 12, 0),
+                info: Info::Multi(6),
             },
             Line {
-                date: naive!(2023, 1, 3, 0, 0, 0),
+                date: naive!(2023, 1, 3, 0, 0),
                 info: Info::Empty,
             },
             Line {
-                date: naive!(2023, 1, 3, 12, 0, 0),
+                date: naive!(2023, 1, 3, 12, 0),
                 info: Info::Empty,
             },
         ];

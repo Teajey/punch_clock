@@ -73,7 +73,7 @@ pub fn run<Tz: ContextTimeZone>(
             undo::run(&mut record)?;
             fs::write(".punch_clock/record", record.serialize()?)?;
         }
-        Action::Day { date, scale } => {
+        Action::Day { date, resolution } => {
             let record = record.with_timezone(&ctx.timezone);
             let date = date.as_ref().map_or_else(
                 || {
@@ -101,8 +101,11 @@ pub fn run<Tz: ContextTimeZone>(
                 total_duration.num_minutes() % 60
             );
 
-            let tr =
-                record::display::time_range::time_range(&record, date..=next_date, 24 * scale)?;
+            let tr = record::display::time_range::time_range(
+                &record,
+                date..=next_date,
+                24 * resolution.as_hour_fraction(),
+            )?;
             println!("{}", tr.print(6, "%R")?);
         }
     };

@@ -103,6 +103,7 @@ pub fn run<Tz: ContextTimeZone>(
 
             let tr = record::display::time_range::time_range(
                 &record,
+                ctx.timezone.now(),
                 date..=next_date,
                 24 * resolution.as_hour_fraction(),
             )?;

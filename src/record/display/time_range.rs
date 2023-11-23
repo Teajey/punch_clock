@@ -129,8 +129,10 @@ impl TimeRange {
     }
 }
 
+#[allow(clippy::too_many_lines)] // TODO: Yes, I know clippy, this function needs a refactor
 pub fn time_range<Tz: ContextTimeZone>(
     record: &Record<Tz>,
+    now: DateTime<Tz>,
     range: RangeInclusive<DateTime<Tz>>,
     resolution: u16,
 ) -> Result<TimeRange> {
@@ -167,7 +169,10 @@ pub fn time_range<Tz: ContextTimeZone>(
         for (i, line) in lines.iter_mut().enumerate() {
             let point_start = points[i];
             let point_end = point_start + range_slice;
-            if check_in < point_end && point_start < check_out {
+            if point_start >= check_out {
+                break;
+            }
+            if check_in < point_end {
                 // let comment = match &entry.comment {
                 //     Some(comment) if !comment_printed => {
                 //         comment_printed = true;
@@ -185,7 +190,7 @@ pub fn time_range<Tz: ContextTimeZone>(
                     Info::SessionWhole(_, _, _, _) => Info::Multi(3),
                     Info::Multi(count) => Info::Multi(count + 1),
                 };
-                if !matches!(line.info, Info::Empty) {
+                if !first_session_line_printed && !matches!(line.info, Info::Empty) {
                     first_session_line_printed = true;
                 }
                 // if first_session_line_printed
@@ -222,6 +227,34 @@ pub fn time_range<Tz: ContextTimeZone>(
             }
         }
     }
+
+    if let Some(check_in) = record.current_session {
+        let mut first_session_line_printed = false;
+        for (i, line) in lines.iter_mut().enumerate() {
+            let point_start = points[i];
+            let point_end = point_start + range_slice;
+            if point_start >= now {
+                break;
+            }
+            if check_in < point_end {
+                line.info = match line.info {
+                    Info::Empty if first_session_line_printed => Info::SessionSpan,
+                    Info::Empty => Info::SessionStart(check_in.naive_local(), None),
+                    Info::SessionSpan
+                    | Info::SessionStart(_, _)
+                    | Info::SessionEnd(_, _)
+                    | Info::SessionWhole(_, _, _, _)
+                    | Info::Multi(_) => {
+                        unreachable!("Current session should not encounter another session.")
+                    }
+                };
+                if !first_session_line_printed && !matches!(line.info, Info::Empty) {
+                    first_session_line_printed = true;
+                }
+            }
+        }
+    }
+
     Ok(TimeRange(lines))
 }
 
@@ -270,7 +303,13 @@ mod test {
     fn time_range() {
         let record_file = "2023-01-02T00:00:00.000000+00:00 2023-01-03T00:00:00.000000+00:00 Today was a good day.";
         let record = Record::try_from(record_file).unwrap();
-        let tr = super::time_range(&record, dt!(2023, 1, 1)..=dt!(2023, 1, 4), 6).unwrap();
+        let tr = super::time_range(
+            &record,
+            dt!(2024, 1, 1),
+            dt!(2023, 1, 1)..=dt!(2023, 1, 4),
+            6,
+        )
+        .unwrap();
         eprintln!("{}", tr.print(4, "%F").unwrap());
         let expected = vec![
             Line {
@@ -309,7 +348,13 @@ mod test {
 2023-11-02T20:47:22.213984+00:00 2023-11-02T22:51:02.408984+00:00
 ";
         let record = Record::try_from(record_file).unwrap();
-        let tr = super::time_range(&record, dt!(2023, 11, 2)..=dt!(2023, 11, 3), 24).unwrap();
+        let tr = super::time_range(
+            &record,
+            dt!(2024, 1, 1),
+            dt!(2023, 11, 2)..=dt!(2023, 11, 3),
+            24,
+        )
+        .unwrap();
         insta::assert_display_snapshot!(tr.print(6, "%R").unwrap());
     }
 
@@ -323,7 +368,13 @@ mod test {
 2023-01-02T12:05:00.000000+00:00 2023-01-02T12:06:00.000000+00:00 Beeble weeble dee 3.
 ";
         let record = Record::try_from(record_file).unwrap();
-        let tr = super::time_range(&record, dt!(2023, 1, 1)..=dt!(2023, 1, 4), 6).unwrap();
+        let tr = super::time_range(
+            &record,
+            dt!(2024, 1, 1),
+            dt!(2023, 1, 1)..=dt!(2023, 1, 4),
+            6,
+        )
+        .unwrap();
         eprintln!("{}", tr.print(6, "%x %X").unwrap());
         let expected = vec![
             Line {

@@ -93,10 +93,10 @@ mod printable {
                     write!(
                         buf,
                         " {}{} -> {}{}",
-                        start_dt.format(date_format),
                         star_if(start_comment.as_deref()),
+                        start_dt.format(date_format),
+                        star_if(end_comment.as_deref()),
                         end_dt.format(date_format),
-                        star_if(end_comment.as_deref())
                     )?;
                     match (start_comment, end_comment) {
                         (None, Some(comment)) | (Some(comment), None) => {

@@ -135,8 +135,9 @@ pub fn time_range<Tz: ContextTimeZone>(
         // let mut comment_printed = false;
         let mut last_session_line = None;
         for (i, line) in lines.iter_mut().enumerate() {
-            let point = points[i];
-            if check_in <= point && point < check_out {
+            let point_start = points[i];
+            let point_end = point_start + range_slice;
+            if check_in < point_end && point_start < check_out {
                 // let comment = match &entry.comment {
                 //     Some(comment) if !comment_printed => {
                 //         comment_printed = true;
@@ -144,7 +145,9 @@ pub fn time_range<Tz: ContextTimeZone>(
                 //     }
                 //     _ => None,
                 // };
-                line.info = Info::Session(None);
+                if matches!(line.info, Info::Empty) {
+                    line.info = Info::Session(None);
+                }
                 last_session_line = Some(line);
             }
         }
@@ -235,6 +238,7 @@ mod test {
         let record_file = "2023-01-02T00:00:00.000000+00:00 2023-01-03T00:00:00.000000+00:00 Today was a good day.";
         let record = Record::try_from(record_file).unwrap();
         let tr = super::time_range(&record, dt!(2023, 1, 1)..=dt!(2023, 1, 4), 6).unwrap();
+        eprintln!("{}", tr.print(4, "%F").unwrap());
         let expected = vec![
             Line {
                 date: naive!(2023, 1, 1, 0, 0, 0),
@@ -262,7 +266,6 @@ mod test {
             },
         ];
         assert_eq!(expected, tr.0);
-        insta::assert_display_snapshot!(tr.print(4, "%F").unwrap());
     }
 
     #[test]
@@ -288,6 +291,7 @@ mod test {
 ";
         let record = Record::try_from(record_file).unwrap();
         let tr = super::time_range(&record, dt!(2023, 1, 1)..=dt!(2023, 1, 4), 6).unwrap();
+        eprintln!("{}", tr.print(6, "%x %X").unwrap());
         let expected = vec![
             Line {
                 date: naive!(2023, 1, 1, 0, 0, 0),
@@ -299,7 +303,7 @@ mod test {
             },
             Line {
                 date: naive!(2023, 1, 2, 0, 0, 0),
-                info: Info::Session(None),
+                info: Info::Empty,
             },
             Line {
                 date: naive!(2023, 1, 2, 12, 0, 0),

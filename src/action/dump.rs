@@ -19,13 +19,10 @@ where
             local_check_in_date.format(DATE_FORMAT),
             local_check_out_date.format(DATE_FORMAT),
         );
-        if let Some(comment) = &entry.comment {
-            print!(" {comment}");
-        }
         println!();
     }
 
-    if let Some(current_session) = record.get_current_session() {
+    if let Some((current_session, _)) = record.get_current_session() {
         println!(
             "| {:<40} | {:<40} |",
             current_session.format(DATE_FORMAT),

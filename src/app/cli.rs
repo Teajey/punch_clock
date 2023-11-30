@@ -44,7 +44,9 @@ impl DayResolution {
 
 #[derive(Subcommand)]
 pub enum Action {
-    In,
+    In {
+        comment: Option<String>,
+    },
     Out {
         comment: Option<String>,
     },

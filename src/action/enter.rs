@@ -2,8 +2,8 @@ use chrono::Utc;
 
 use crate::{error::Result, record::Record};
 
-pub fn run(record: &mut Record<Utc>) -> Result<()> {
-    let clock_in_time = record.clock_in()?;
+pub fn run(record: &mut Record<Utc>, comment: Option<String>) -> Result<()> {
+    let clock_in_time = record.clock_in(comment)?;
 
     println!(
         "Clocked in on {}",

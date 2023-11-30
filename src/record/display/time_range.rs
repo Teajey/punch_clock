@@ -173,16 +173,11 @@ pub fn time_range<Tz: ContextTimeZone>(
                 break;
             }
             if check_in < point_end {
-                // let comment = match &entry.comment {
-                //     Some(comment) if !comment_printed => {
-                //         comment_printed = true;
-                //         Some(comment.clone())
-                //     }
-                //     _ => None,
-                // };
                 line.info = match line.info {
                     Info::Empty if first_session_line_printed => Info::SessionSpan,
-                    Info::Empty => Info::SessionStart(check_in.naive_local(), None),
+                    Info::Empty => {
+                        Info::SessionStart(check_in.naive_local(), entry.in_comment.clone())
+                    }
                     Info::SessionSpan => {
                         unreachable!("There shouldn't ever be more than one session here.")
                     }
@@ -193,16 +188,12 @@ pub fn time_range<Tz: ContextTimeZone>(
                 if !first_session_line_printed && !matches!(line.info, Info::Empty) {
                     first_session_line_printed = true;
                 }
-                // if first_session_line_printed
-                // if matches!(line.info, Info::Empty) {
-                //     line.info = Info::Session(None);
-                // }
 
                 last_session_line = Some(line);
             }
         }
         if let Some(line) = last_session_line {
-            match (&mut line.info, entry.comment.as_ref()) {
+            match (&mut line.info, entry.out_comment.as_ref()) {
                 (Info::SessionSpan, comment) => {
                     line.info = Info::SessionEnd(check_out.naive_local(), comment.cloned());
                 }
@@ -228,7 +219,7 @@ pub fn time_range<Tz: ContextTimeZone>(
         }
     }
 
-    if let Some(check_in) = record.current_session {
+    if let Some((check_in, in_comment)) = &record.current_session {
         let mut first_session_line_printed = false;
         for (i, line) in lines.iter_mut().enumerate() {
             let point_start = points[i];
@@ -236,10 +227,10 @@ pub fn time_range<Tz: ContextTimeZone>(
             if point_start >= now {
                 break;
             }
-            if check_in < point_end {
+            if check_in < &point_end {
                 line.info = match line.info {
                     Info::Empty if first_session_line_printed => Info::SessionSpan,
-                    Info::Empty => Info::SessionStart(check_in.naive_local(), None),
+                    Info::Empty => Info::SessionStart(check_in.naive_local(), in_comment.clone()),
                     Info::SessionSpan
                     | Info::SessionStart(_, _)
                     | Info::SessionEnd(_, _)
@@ -301,7 +292,8 @@ mod test {
 
     #[test]
     fn time_range() {
-        let record_file = "2023-01-02T00:00:00.000000+00:00 2023-01-03T00:00:00.000000+00:00 Today was a good day.";
+        let record_file = "2023-01-02T00:00:00.000000+00:00
+2023-01-03T00:00:00.000000+00:00 Today was a good day.";
         let record = Record::try_from(record_file).unwrap();
         let tr = super::time_range(
             &record,
@@ -342,10 +334,17 @@ mod test {
 
     #[test]
     fn time_range_day() {
-        let record_file = "2023-11-02T09:30:25.426260+00:00 2023-11-02T11:24:42.221260+00:00
-2023-11-02T13:10:22.138841+00:00 2023-11-02T14:34:36.184841+00:00
-2023-11-02T14:55:00.061850+00:00 2023-11-02T15:53:38.141850+00:00
-2023-11-02T20:47:22.213984+00:00 2023-11-02T22:51:02.408984+00:00
+        let record_file = "2023-11-02T09:30:25.426260+00:00
+2023-11-02T11:24:42.221260+00:00
+
+2023-11-02T13:10:22.138841+00:00
+2023-11-02T14:34:36.184841+00:00
+
+2023-11-02T14:55:00.061850+00:00
+2023-11-02T15:53:38.141850+00:00
+
+2023-11-02T20:47:22.213984+00:00
+2023-11-02T22:51:02.408984+00:00
 ";
         let record = Record::try_from(record_file).unwrap();
         let tr = super::time_range(
@@ -360,12 +359,20 @@ mod test {
 
     #[test]
     fn time_range_overlapping_comments() {
-        let record_file =
-            "2023-01-01T12:01:00.000000+00:00 2023-01-01T12:02:00.000000+00:00 Good session.
-2023-01-01T12:04:00.000000+00:00 2023-01-01T12:05:00.000000+00:00 Even better session!
-2023-01-02T12:01:00.000000+00:00 2023-01-02T12:02:00.000000+00:00 Beeble weeble dee 1.
-2023-01-02T12:03:00.000000+00:00 2023-01-02T12:04:00.000000+00:00 Beeble weeble dee 2.
-2023-01-02T12:05:00.000000+00:00 2023-01-02T12:06:00.000000+00:00 Beeble weeble dee 3.
+        let record_file = "2023-01-01T12:01:00.000000+00:00
+2023-01-01T12:02:00.000000+00:00 Good session.
+
+2023-01-01T12:04:00.000000+00:00
+2023-01-01T12:05:00.000000+00:00 Even better session!
+
+2023-01-02T12:01:00.000000+00:00
+2023-01-02T12:02:00.000000+00:00 Beeble weeble dee 1.
+
+2023-01-02T12:03:00.000000+00:00
+2023-01-02T12:04:00.000000+00:00 Beeble weeble dee 2.
+
+2023-01-02T12:05:00.000000+00:00
+2023-01-02T12:06:00.000000+00:00 Beeble weeble dee 3.
 ";
         let record = Record::try_from(record_file).unwrap();
         let tr = super::time_range(

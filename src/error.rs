@@ -23,6 +23,9 @@ pub enum Main {
     #[error("An entry has an invalid number of tokens")]
     EntryIncorrectNumberOfTokens,
 
+    #[error("An entry is defined with an invalid number of lines")]
+    EntryIncorrectNumberOfLines,
+
     #[error("Not currently clocked-in.")]
     NotClockedIn,
 

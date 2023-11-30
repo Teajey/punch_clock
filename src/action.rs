@@ -26,12 +26,12 @@ pub fn run<Tz: ContextTimeZone>(
     mut record: Record<Utc>,
 ) -> Result<()> {
     match action {
-        Action::In => {
-            enter::run(&mut record)?;
+        Action::In { comment } => {
+            enter::run(&mut record, comment.clone())?;
             fs::write(".punch_clock/record", record.serialize()?)?;
         }
         Action::Out { comment } => {
-            exit::run(&mut record, comment.as_deref().map(ToOwned::to_owned))?;
+            exit::run(&mut record, comment.clone())?;
             fs::write(".punch_clock/record", record.serialize()?)?;
         }
         Action::Status => status::run(&record)?,

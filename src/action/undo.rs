@@ -22,7 +22,7 @@ pub fn run(record: &mut Record<Utc>) -> Result<()> {
         return Ok(());
     }
 
-    let dt = record.pop().expect("presence checked at start of function");
+    let (dt, _) = record.pop().expect("presence checked at start of function");
     println!(
         "Removed latest timestamp from {}",
         dt.with_timezone(&Local).format("%c")
@@ -35,7 +35,7 @@ pub fn run(record: &mut Record<Utc>) -> Result<()> {
                 check_out.with_timezone(&Local).format("%c")
             );
         }
-        Latest::Current(current_session) => {
+        Latest::Current(current_session, _) => {
             println!(
                 "Now clocked in since {}",
                 current_session.with_timezone(&Local).format("%c")

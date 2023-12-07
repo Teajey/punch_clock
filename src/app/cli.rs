@@ -10,7 +10,9 @@ pub struct Base {
     #[command(subcommand)]
     pub action: Action,
     #[arg(long)]
+    /// Create a .punch_clock directory in the current working directory
     pub init: bool,
+    /// Override punch_clock's current UTC offset
     #[arg(short, long)]
     pub offset: Option<i32>,
 }
@@ -44,26 +46,42 @@ impl DayResolution {
 
 #[derive(Subcommand)]
 pub enum Action {
+    /// Start a session
     In {
+        /// Provide a comment associated with the start of this session
         comment: Option<String>,
     },
+    /// End the current session
     Out {
+        /// Provide a comment associated with the end of this session
         comment: Option<String>,
     },
+    /// Check whether you're currently in a session
     Status,
+    /// Print the record, formatted
     Dump,
+    /// Open the record in your editor, in local time
     Edit,
+    /// See some stats about your work hours
     Stats {
+        /// For a particular day (YYYY-MM-DD)
         day: Option<day::Day>,
     },
+    /// Print daily visualization of work hours (past 7 days by default)
     Calendar {
+        /// YYYY-MM-DD
         from: Option<day::Day>,
+        /// YYYY-MM-DD
         to: Option<day::Day>,
+        /// Set the character width of the calendar
         #[arg(long, default_value_t = 48)]
         width: usize,
     },
+    /// Remove the previous latest entry in the record
     Undo,
+    /// Print visualization of a day's work hours (today by default)
     Day {
+        /// YYYY-MM-DD
         date: Option<day::Day>,
         #[arg(short = 'r', long, value_enum, default_value_t = DayResolution::Hour)]
         resolution: DayResolution,

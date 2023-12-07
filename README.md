@@ -1,5 +1,12 @@
 I had trouble keeping track of my work hours when moving between timezones, so I made this app :^)
 
+# Install
+
+```
+git clone https://github.com/Teajey/punch_clock.git
+cargo install --path punch_clock/
+```
+
 # Usage
 
 Start your work session:
@@ -88,11 +95,4 @@ Total time: 0 hours, 19 minutes
 21:00 ░▒░▒░▒
 22:00 ▒░▒░▒░
 23:00 ░▒░▒░▒
-```
-
-# Install
-
-```
-cd punch_clock/
-cargo install --path .
 ```

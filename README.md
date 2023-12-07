@@ -1,5 +1,3 @@
-A work-hours tracker
-
 I had trouble keeping track of my work hours when moving between timezones, so I made this app :^)
 
 Start your work session:

@@ -1,5 +1,7 @@
 I had trouble keeping track of my work hours when moving between timezones, so I made this app :^)
 
+# Usage
+
 Start your work session:
 ```
 $ punch_clock in "This is me, punchin' in"
@@ -58,7 +60,7 @@ Total time: 80 hours, 38 minutes
 2023-06-30 ▓░▒░▒░▒░▓▓▒░▒░▒░▒░▒░▒░▒░▒░▒░▒░▒░▒▓▓▓▓▓▓░▒░▒░▒░▒░ 4 hours, 8 minutes
 ```
 
-Or by in a day view:
+Or in a day view:
 ```
 $ punch_clock day 2023-11-10
 Total time: 0 hours, 19 minutes

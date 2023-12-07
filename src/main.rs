@@ -4,6 +4,7 @@ mod error;
 mod fs;
 mod range;
 mod record;
+mod string;
 mod time;
 
 use chrono::{FixedOffset, Local, Utc};

@@ -64,4 +64,7 @@ pub enum Main {
 
     #[error("Start must be before end")]
     RangeStartPosition,
+
+    #[error("Comment must not contain newlines")]
+    CommentWithNewlines,
 }

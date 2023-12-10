@@ -73,13 +73,13 @@ mod printable {
                 Info::SessionStart(dt, comment) => {
                     write!(buf, " In @ {}", dt.format(date_format))?;
                     if let Some(comment) = comment {
-                        write!(buf, " {comment:?}")?;
+                        write!(buf, " {comment}")?;
                     }
                 }
                 Info::SessionEnd(dt, comment) => {
                     write!(buf, " Out @ {}", dt.format(date_format))?;
                     if let Some(comment) = comment {
-                        write!(buf, " {comment:?}")?;
+                        write!(buf, " {comment}")?;
                     }
                 }
                 Info::SessionWhole(start_dt, end_dt, start_comment, end_comment) => {
@@ -100,7 +100,7 @@ mod printable {
                     )?;
                     match (start_comment, end_comment) {
                         (None, Some(comment)) | (Some(comment), None) => {
-                            write!(buf, " *{comment:?}")?;
+                            write!(buf, " *{comment}")?;
                         }
                         _ => (),
                     }

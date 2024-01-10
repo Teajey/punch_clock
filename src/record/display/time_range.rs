@@ -231,12 +231,11 @@ pub fn time_range<Tz: ContextTimeZone>(
                 line.info = match line.info {
                     Info::Empty if first_session_line_printed => Info::SessionSpan,
                     Info::Empty => Info::SessionStart(check_in.naive_local(), in_comment.clone()),
-                    Info::SessionSpan
-                    | Info::SessionStart(_, _)
-                    | Info::SessionEnd(_, _)
-                    | Info::SessionWhole(_, _, _, _)
-                    | Info::Multi(_) => {
-                        unreachable!("Current session should not encounter another session.")
+                    Info::SessionEnd(_, _) => Info::Multi(2),
+                    Info::SessionWhole(_, _, _, _) => Info::Multi(3),
+                    Info::Multi(count) => Info::Multi(count + 1),
+                    Info::SessionSpan | Info::SessionStart(_, _) => {
+                        unreachable!("Current session should not encounter another session's tail.")
                     }
                 };
                 if !first_session_line_printed && !matches!(line.info, Info::Empty) {
@@ -406,6 +405,144 @@ mod test {
             },
             Line {
                 date: naive!(2023, 1, 3, 12, 0),
+                info: Info::Empty,
+            },
+        ];
+        assert_eq!(expected, tr.0);
+    }
+
+    #[test]
+    fn current_session_overlapping_last_check_out() {
+        let record_file = "2024-01-09T22:00:00.000000+00:00
+2024-01-10T02:21:28.000000+00:00
+
+2024-01-10T02:45:00.000000+00:00
+";
+        let record = Record::try_from(record_file).unwrap();
+        let tr = super::time_range(
+            &record,
+            dt!(2024, 1, 11),
+            dt!(2024, 1, 9)..=dt!(2024, 1, 12),
+            6,
+        )
+        .unwrap();
+        eprintln!("{}", tr.print(6, "%x %X").unwrap());
+        let expected = vec![
+            Line {
+                date: naive!(2024, 1, 9, 0, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2024, 1, 9, 12, 0),
+                info: Info::SessionStart(naive!(2024, 1, 9, 22, 0), None),
+            },
+            Line {
+                date: naive!(2024, 1, 10, 0, 0),
+                info: Info::Multi(2),
+            },
+            Line {
+                date: naive!(2024, 1, 10, 12, 0),
+                info: Info::SessionSpan,
+            },
+            Line {
+                date: naive!(2024, 1, 11, 0, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2024, 1, 11, 12, 0),
+                info: Info::Empty,
+            },
+        ];
+        assert_eq!(expected, tr.0);
+    }
+
+    #[test]
+    fn current_session_overlapping_last_session() {
+        let record_file = "2024-01-10T02:20:28.908820+00:00
+2024-01-10T02:21:28.908820+00:00
+
+2024-01-10T02:45:00.847169+00:00
+";
+        let record = Record::try_from(record_file).unwrap();
+        let tr = super::time_range(
+            &record,
+            dt!(2024, 1, 11),
+            dt!(2024, 1, 9)..=dt!(2024, 1, 12),
+            6,
+        )
+        .unwrap();
+        eprintln!("{}", tr.print(6, "%x %X").unwrap());
+        let expected = vec![
+            Line {
+                date: naive!(2024, 1, 9, 0, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2024, 1, 9, 12, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2024, 1, 10, 0, 0),
+                info: Info::Multi(3),
+            },
+            Line {
+                date: naive!(2024, 1, 10, 12, 0),
+                info: Info::SessionSpan,
+            },
+            Line {
+                date: naive!(2024, 1, 11, 0, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2024, 1, 11, 12, 0),
+                info: Info::Empty,
+            },
+        ];
+        assert_eq!(expected, tr.0);
+    }
+
+    #[test]
+    fn current_session_overlapping_multiple_previous_sessions() {
+        let record_file = "2024-01-10T02:18:28.908820+00:00
+2024-01-10T02:19:28.908820+00:00
+
+2024-01-10T02:20:28.908820+00:00
+2024-01-10T02:21:28.908820+00:00
+
+2024-01-10T02:45:00.847169+00:00
+";
+        let record = Record::try_from(record_file).unwrap();
+        let tr = super::time_range(
+            &record,
+            dt!(2024, 1, 11),
+            dt!(2024, 1, 9)..=dt!(2024, 1, 12),
+            6,
+        )
+        .unwrap();
+        eprintln!("{}", tr.print(6, "%x %X").unwrap());
+        let expected = vec![
+            Line {
+                date: naive!(2024, 1, 9, 0, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2024, 1, 9, 12, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2024, 1, 10, 0, 0),
+                info: Info::Multi(5),
+            },
+            Line {
+                date: naive!(2024, 1, 10, 12, 0),
+                info: Info::SessionSpan,
+            },
+            Line {
+                date: naive!(2024, 1, 11, 0, 0),
+                info: Info::Empty,
+            },
+            Line {
+                date: naive!(2024, 1, 11, 12, 0),
                 info: Info::Empty,
             },
         ];

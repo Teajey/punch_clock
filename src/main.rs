@@ -30,15 +30,17 @@ fn run() -> error::Result<()> {
         return Err(error::Main::Uninitialized);
     };
 
+    let action = cli.action.unwrap_or(app::cli::Action::Status);
+
     if let Some(offset) = cli.offset {
         let ctx = app::Context::init(
             FixedOffset::east_opt(offset * 3600)
                 .ok_or_else(|| error::Main::TimezoneOutOfRange(offset))?,
         )?;
-        action::run(&ctx, &cli.action, record)?;
+        action::run(&ctx, &action, record)?;
     } else {
         let ctx = app::Context::init(Local)?;
-        action::run(&ctx, &cli.action, record)?;
+        action::run(&ctx, &action, record)?;
     }
 
     Ok(())

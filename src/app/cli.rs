@@ -8,7 +8,8 @@ pub use day::Day;
 #[command(author, version, about)]
 pub struct Base {
     #[command(subcommand)]
-    pub action: Action,
+    /// Default: status
+    pub action: Option<Action>,
     #[arg(long)]
     /// Create a .punch_clock directory in the current working directory
     pub init: bool,

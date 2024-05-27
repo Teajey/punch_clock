@@ -1,3 +1,5 @@
+use crate::script_hook;
+
 pub type Result<T, E = Main> = std::result::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]
@@ -67,4 +69,7 @@ pub enum Main {
 
     #[error("Comment must not contain newlines")]
     CommentWithNewlines,
+
+    #[error("Failed to execute script hook: {0}")]
+    ScriptHook(#[from] script_hook::Error),
 }

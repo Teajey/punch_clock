@@ -4,6 +4,7 @@ mod error;
 mod fs;
 mod range;
 mod record;
+mod script_hook;
 mod string;
 mod time;
 

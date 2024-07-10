@@ -16,6 +16,9 @@ pub struct Base {
     /// Override punch_clock's current UTC offset
     #[arg(short, long)]
     pub offset: Option<i32>,
+    /// Run a command without triggering any hooks
+    #[arg(long, default_value_t = false)]
+    pub skip_hooks: bool,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -78,7 +81,7 @@ pub enum Action {
         #[arg(long, default_value_t = 48)]
         width: usize,
     },
-    /// Remove the previous latest entry in the record
+    /// Remove the latest entry in the record
     Undo,
     /// Print visualization of a day's work hours (today by default)
     Day {

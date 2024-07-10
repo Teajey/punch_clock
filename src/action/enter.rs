@@ -2,12 +2,14 @@ use chrono::Utc;
 
 use crate::{error::Result, record::Record, script_hook, string::assert_no_newlines};
 
-pub fn run(record: &mut Record<Utc>, comment: Option<String>) -> Result<()> {
+pub fn run(record: &mut Record<Utc>, comment: Option<String>, skip_hooks: bool) -> Result<()> {
     let comment = comment.map(assert_no_newlines).transpose()?;
 
     let clock_in_time = record.clock_in(comment)?;
 
-    script_hook::run("in")?;
+    if !skip_hooks {
+        script_hook::run("in")?;
+    }
 
     println!(
         "Clocked in on {}",

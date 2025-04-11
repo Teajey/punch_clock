@@ -74,7 +74,7 @@ impl<Tz: TimeZone> Entry<Tz> {
         self.check_in
             .clone()
             .checked_add_signed(self.get_work_duration())
-            .ok_or_else(|| error::Main::DateTimeOverflow)
+            .ok_or(error::Main::DateTimeOverflow)
     }
 }
 
@@ -162,6 +162,8 @@ impl TryFrom<&str> for Entry<FixedOffset> {
 
 pub enum Latest<'a, Tz: TimeZone> {
     Entry(&'a Entry<Tz>),
+    #[allow(dead_code)]
+    // It's unused, but it represents the `in_comment` of the latest entry, so I'll keep it here
     Current(&'a DateTime<Tz>, Option<&'a str>),
     None,
 }
@@ -656,6 +658,7 @@ mod test {
         let ctx = context::Context {
             editor_path: String::new(),
             timezone: FixedOffset::east_opt(0).unwrap(),
+            skip_hooks: Default::default(),
         };
         let rec_file = "2023-07-10T05:05:42.372091+00:00 2023-07-10T09:38:44.320091+00:00
 2023-07-10T20:00:00+00:00        2023-07-10T22:13:34.369+00:00";
@@ -670,6 +673,7 @@ mod test {
         let ctx = context::Context {
             editor_path: String::new(),
             timezone: FixedOffset::east_opt(0).unwrap(),
+            skip_hooks: Default::default(),
         };
         let rec_file = "2023-06-04T21:08:34.790590+00:00 2023-06-04T22:32:47.660590+00:00
 2023-06-05T04:30:04.199633+00:00 2023-06-05T07:18:50.734633+00:00";
@@ -684,6 +688,7 @@ mod test {
         let ctx = context::Context {
             editor_path: String::new(),
             timezone: FixedOffset::east_opt(12 * 3600).unwrap(),
+            skip_hooks: Default::default(),
         };
         let rec_file = "2023-06-30T04:30:00.893153+00:00
 2023-06-30T07:15:07.931153+00:00

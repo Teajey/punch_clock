@@ -11,9 +11,9 @@ pub struct Base {
     /// Default: status
     pub action: Option<Action>,
     #[arg(long)]
-    /// Create a .punch_clock directory in the current working directory
+    /// Create a `.punch_clock` directory in the current working directory
     pub init: bool,
-    /// Override punch_clock's current UTC offset
+    /// Override `punch_clock`'s current UTC offset
     #[arg(short, long)]
     pub offset: Option<i32>,
     /// Run a command without triggering any hooks

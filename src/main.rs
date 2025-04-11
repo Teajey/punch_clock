@@ -35,8 +35,7 @@ fn run() -> error::Result<()> {
 
     if let Some(offset) = cli.offset {
         let ctx = app::Context::init(
-            FixedOffset::east_opt(offset * 3600)
-                .ok_or_else(|| error::Main::TimezoneOutOfRange(offset))?,
+            FixedOffset::east_opt(offset * 3600).ok_or(error::Main::TimezoneOutOfRange(offset))?,
             cli.skip_hooks,
         )?;
         action::run(&ctx, &action, record)?;

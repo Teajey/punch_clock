@@ -141,12 +141,7 @@ pub fn time_range<Tz: ContextTimeZone>(
     let range_span = range_end - range_start;
     let range_slice = range_span / resolution.into();
     let points = (0..resolution)
-        .map(|i| {
-            range_start
-                + range_slice
-                    * i32::try_from(i)
-                        .expect("If this value doesn't fit inside i32 what are you even doing.")
-        })
+        .map(|i| range_start + range_slice * i32::from(i))
         .collect::<Vec<_>>();
     let mut lines: Vec<Line> = points
         .iter()
@@ -204,7 +199,7 @@ pub fn time_range<Tz: ContextTimeZone>(
                     line.info = Info::SessionWhole(
                         *start_dt,
                         check_out.naive_local(),
-                        start_comment.as_ref().cloned(),
+                        start_comment.clone(),
                         end_comment.cloned(),
                     );
                 }

@@ -137,7 +137,7 @@ mod tests {
     }
 
     fn line_from_record(record: Record<FixedOffset>, width: usize) -> String {
-        let ctx = Context::init(FixedOffset::east_opt(0).unwrap()).unwrap();
+        let ctx = Context::init(FixedOffset::east_opt(0).unwrap(), Default::default()).unwrap();
         let today_start = datetime(0, 0);
         let today_end = today_start.checked_add_days(chrono::Days::new(1)).unwrap();
         let today_end = today_end

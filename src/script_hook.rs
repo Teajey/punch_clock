@@ -7,18 +7,17 @@ pub enum Error {
 }
 
 fn run_in_current_dir(name: &str) -> Result<(), Error> {
-    let hook_file_name = format!("{}{}", "./", name);
+    let hook_file_name = format!("./{name}");
     let hook_file_path = PathBuf::from(&hook_file_name);
     if !hook_file_path.exists() {
         return Ok(());
     }
 
-    let cmd = Command::new(hook_file_name).output()?;
+    let status = Command::new(hook_file_name).status()?;
 
-    if !cmd.status.success() {
-        let stderr_text = String::from_utf8_lossy(&cmd.stderr);
-        eprintln!("'{name}' hook failed. Dumping stderr:");
-        eprintln!("{stderr_text}");
+    if !status.success() {
+        let exit_code = status.code().unwrap_or(-1);
+        std::process::exit(exit_code);
     }
 
     Ok(())

@@ -17,6 +17,7 @@ use crate::{
     },
     error::{self, Result},
     record::{self, Record},
+    script_hook,
     time::ContextTimeZone,
 };
 
@@ -27,12 +28,20 @@ pub fn run<Tz: ContextTimeZone>(
 ) -> Result<()> {
     match action {
         Action::In { comment } => {
-            enter::run(&mut record, comment.clone(), ctx.skip_hooks)?;
+            enter::run(&mut record, comment.clone())?;
             fs::write(".punch_clock/record", record.serialize()?)?;
+
+            if !ctx.skip_hooks {
+                script_hook::run("in")?;
+            }
         }
         Action::Out { comment } => {
-            exit::run(&mut record, comment.clone(), ctx.skip_hooks)?;
+            exit::run(&mut record, comment.clone())?;
             fs::write(".punch_clock/record", record.serialize()?)?;
+
+            if !ctx.skip_hooks {
+                script_hook::run("out")?;
+            }
         }
         Action::Status => status::run(&record)?,
         Action::Dump => {

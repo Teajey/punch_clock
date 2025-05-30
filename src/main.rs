@@ -11,6 +11,9 @@ mod time;
 use chrono::{FixedOffset, Local, Utc};
 use clap::Parser;
 
+static GIT_VERSION: &str = include_str!("./git-version.txt");
+static LONG_VERSION: &str = include_str!("./long-version.txt");
+
 fn main() {
     if let Err(err) = run() {
         println!("Error: {err}");

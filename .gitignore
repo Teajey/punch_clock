@@ -1,2 +1,5 @@
 /target
 .punch_clock
+
+src/git-version.txt
+src/long-version.txt

@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 pub use day::Day;
 
 #[derive(Parser)]
-#[command(author, version, about)]
+#[command(author, version = crate::GIT_VERSION, long_version = crate::LONG_VERSION, about)]
 pub struct Base {
     #[command(subcommand)]
     /// Default: status

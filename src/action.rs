@@ -29,6 +29,11 @@ pub fn run<Tz: ContextTimeZone>(
     match action {
         Action::In { comment } => {
             enter::run(&mut record, comment.clone())?;
+
+            if !ctx.skip_hooks {
+                script_hook::run("before-in")?;
+            }
+
             fs::write(".punch_clock/record", record.serialize()?)?;
 
             if !ctx.skip_hooks {
@@ -37,6 +42,11 @@ pub fn run<Tz: ContextTimeZone>(
         }
         Action::Out { comment } => {
             exit::run(&mut record, comment.clone())?;
+
+            if !ctx.skip_hooks {
+                script_hook::run("before-out")?;
+            }
+
             fs::write(".punch_clock/record", record.serialize()?)?;
 
             if !ctx.skip_hooks {

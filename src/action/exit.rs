@@ -10,7 +10,7 @@ pub fn run(record: &mut Record<Utc>, comment: Option<String>) -> Result<()> {
     let (clock_out_time, since) = record.clock_out(comment)?;
 
     println!(
-        "Clocked out on {} after {}",
+        "Clocking out on {} after {}",
         clock_out_time.with_timezone(&chrono::Local).format("%c"),
         human_readable_duration(&since)?
     );

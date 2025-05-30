@@ -17,6 +17,7 @@ fn run_in_current_dir(name: &str) -> Result<(), Error> {
 
     if !status.success() {
         let exit_code = status.code().unwrap_or(-1);
+        println!("'{name}' hook exited with code {exit_code}");
         std::process::exit(exit_code);
     }
 

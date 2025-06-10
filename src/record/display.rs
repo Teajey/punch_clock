@@ -76,12 +76,35 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
         range_start.into_day_start(ctx)?,
         range_end.into_day_end(ctx)?,
     )?;
+    let days_covered = total_datetime_ranges
+        .iter()
+        .flat_map(DateTimeRange::days_covered)
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+
     let total_duration: chrono::Duration = total_datetime_ranges.into_iter().sum();
     println!(
         "Total time: {} hours, {} minutes",
         total_duration.num_hours(),
         total_duration.num_minutes() % 60
     );
+
+    match i32::try_from(days_covered) {
+        Ok(days_covered) => {
+            println!("# of work days: {days_covered}");
+            let average_duration = total_duration / days_covered;
+            println!(
+                "Average work day time: {} hours, {} minutes",
+                average_duration.num_hours(),
+                average_duration.num_minutes() % 60
+            );
+        }
+        Err(err) => {
+            println!("# of work days: FAILED TO PARSE FROM usize: {err}");
+            println!("Average work day time: UNAVAILABLE");
+        }
+    }
+
     for (i, day) in range_start
         .iter_days()
         .take_while(|d| d <= &range_end)

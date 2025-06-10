@@ -1,6 +1,6 @@
 use std::{fmt::Display, iter::Sum, ops::RangeInclusive};
 
-use chrono::{DateTime, Duration, TimeZone};
+use chrono::{DateTime, Duration, NaiveDate, TimeZone};
 
 use crate::{
     error::{self, Result},
@@ -50,6 +50,15 @@ impl<Tz: TimeZone> DateTimeRange<Tz> {
     pub fn end(&self) -> &DateTime<Tz> {
         self.0.end()
     }
+
+    pub fn days_covered(&self) -> Vec<NaiveDate> {
+        let start = self.start().date_naive();
+        let end = self.end().date_naive();
+        let diff = end - start;
+        let num_days = usize::try_from(diff.num_days() + 1)
+            .expect("number of days is positive and fits in usize");
+        start.iter_days().take(num_days).collect()
+    }
 }
 
 impl<Tz: TimeZone> From<Entry<Tz>> for DateTimeRange<Tz> {
@@ -66,5 +75,29 @@ where
 {
     fn sum<I: Iterator<Item = DateTimeRange<Tz>>>(iter: I) -> Self {
         iter.fold(Duration::zero(), |duration, dtr| duration + dtr.span())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn days_covered() {
+        let start = chrono::DateTime::<chrono::Utc>::from_str("2020-01-01T00:00:00.000Z").unwrap();
+        let end = chrono::DateTime::<chrono::Utc>::from_str("2020-01-04T00:00:00.000Z").unwrap();
+        let range = DateTimeRange::new(start, end).unwrap();
+        let dc = range.days_covered();
+        assert_eq!(
+            vec![
+                chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+                chrono::NaiveDate::from_ymd_opt(2020, 1, 2).unwrap(),
+                chrono::NaiveDate::from_ymd_opt(2020, 1, 3).unwrap(),
+                chrono::NaiveDate::from_ymd_opt(2020, 1, 4).unwrap(),
+            ],
+            dc
+        );
     }
 }

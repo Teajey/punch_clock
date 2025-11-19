@@ -11,8 +11,8 @@ mod time;
 use chrono::{FixedOffset, Local, Utc};
 use clap::Parser;
 
-static GIT_VERSION: &str = include_str!("./git-version.txt");
-static LONG_VERSION: &str = include_str!("./long-version.txt");
+static GIT_REVISION: &str = env!("PUNCH_CLOCK_GIT_REVISION");
+static LONG_VERSION: &str = env!("PUNCH_CLOCK_LONG_VERSION");
 
 fn main() {
     if let Err(err) = run() {

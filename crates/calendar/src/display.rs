@@ -1,15 +1,13 @@
-pub mod time_range;
-
 use std::ops::RangeInclusive;
 
 use chrono::{DateTime, Duration, NaiveDate};
 use context::Context;
 
-use super::Record;
-use crate::{
-    app::context,
+use punch_clock_core::{
+    context,
     error::Result,
-    time::{self, range::DateTimeRange, ContextTimeZone, NaiveDateOperations},
+    record::Record,
+    time::{self, ContextTimeZone, NaiveDateOperations, range::DateTimeRange},
 };
 
 #[allow(clippy::cast_precision_loss)]
@@ -90,6 +88,10 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
     );
 
     match i32::try_from(days_covered) {
+        Ok(0) => {
+            println!("# of work days: 0");
+            println!("Average work day time: 0 hours, 0 minutes");
+        }
         Ok(days_covered) => {
             println!("# of work days: {days_covered}");
             let average_duration = total_duration / days_covered;
@@ -136,8 +138,13 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
 mod tests {
     use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 
+    use punch_clock_core::context::{self, Context};
+    use punch_clock_core::record::Entry;
+    use punch_clock_core::time::range::DateTimeRange;
+
+    use crate::display::paint_day_range;
+
     use super::Record;
-    use crate::{app::Context, record::Entry, time::range::DateTimeRange};
 
     fn tz() -> FixedOffset {
         FixedOffset::east_opt(0).unwrap()
@@ -155,12 +162,16 @@ mod tests {
         dt
     }
 
+    fn date_md(month: u32, day: u32) -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(2023, month, day).unwrap()
+    }
+
     fn entry(hour1: u32, min1: u32, hour2: u32, min2: u32) -> Entry<FixedOffset> {
         Entry::try_new(datetime(hour1, min1), datetime(hour2, min2), None, None).unwrap()
     }
 
     fn line_from_record(record: Record<FixedOffset>, width: usize) -> String {
-        let ctx = Context::init(FixedOffset::east_opt(0).unwrap(), Default::default()).unwrap();
+        let ctx = Context::init_with_offset(Default::default(), 0).unwrap();
         let today_start = datetime(0, 0);
         let today_end = today_start.checked_add_days(chrono::Days::new(1)).unwrap();
         let today_end = today_end
@@ -252,5 +263,84 @@ mod tests {
             false,
         );
         assert_eq!("▓▓▓▓▓▓▒░▒░▒░▒░▒░▒░▓▓▓▓▓▓", line);
+    }
+
+    #[test]
+    fn range_end_index_x_out_of_range_for_slice_of_length_y() {
+        let ctx = context::Context {
+            editor_path: String::new(),
+            offset: Some(0),
+            timezone: FixedOffset::east_opt(0).unwrap(),
+            skip_hooks: Default::default(),
+        };
+        let rec_file = "2023-07-10T05:05:42.372091+00:00 2023-07-10T09:38:44.320091+00:00
+2023-07-10T20:00:00+00:00        2023-07-10T22:13:34.369+00:00";
+        let rec = Record::try_from(rec_file)
+            .unwrap()
+            .with_timezone(&ctx.timezone);
+        paint_day_range(&ctx, &rec, date_md(7, 9)..=date_md(7, 10), 48).unwrap();
+    }
+
+    #[test]
+    fn range_end_index_x_out_of_range_for_slice_of_length_y_2() {
+        let ctx = context::Context {
+            editor_path: String::new(),
+            offset: Some(0),
+            timezone: FixedOffset::east_opt(0).unwrap(),
+            skip_hooks: Default::default(),
+        };
+        let rec_file = "2023-06-04T21:08:34.790590+00:00 2023-06-04T22:32:47.660590+00:00
+2023-06-05T04:30:04.199633+00:00 2023-06-05T07:18:50.734633+00:00";
+        let rec = Record::try_from(rec_file)
+            .unwrap()
+            .with_timezone(&ctx.timezone);
+        paint_day_range(&ctx, &rec, date_md(6, 4)..=date_md(6, 5), 48).unwrap();
+    }
+
+    #[test]
+    fn range_end_index_x_out_of_range_for_slice_of_length_y_3() {
+        let ctx = context::Context {
+            editor_path: String::new(),
+            offset: Some(12 * 3600),
+            timezone: FixedOffset::east_opt(12 * 3600).unwrap(),
+            skip_hooks: Default::default(),
+        };
+        let rec_file = "2023-06-30T04:30:00.893153+00:00
+2023-06-30T07:15:07.931153+00:00
+
+2023-07-10T05:05:42.372091+00:00
+2023-07-10T09:38:44.320091+00:00
+
+2023-07-10T20:00:00+00:00       
+2023-07-10T22:13:34.369+00:00   
+
+2023-07-11T04:30:55.569838+00:00
+2023-07-11T05:05:55.569838+00:00
+
+2023-07-11T09:01:20.726248+00:00
+2023-07-11T12:08:36.149248+00:00
+
+2023-07-11T12:32:28.616529+00:00
+2023-07-11T14:27:00.836529+00:00
+
+2023-07-11T20:03:53.114039+00:00
+2023-07-11T22:41:25.885039+00:00
+
+2023-07-12T04:30:00+00:00       
+2023-07-12T04:54:25.885+00:00   
+
+2023-07-12T09:30:00+00:00       
+2023-07-12T13:00:00+00:00       
+
+2023-07-12T22:04:34.947469+00:00
+2023-07-12T23:29:44.706469+00:00
+
+2023-07-13T09:08:38.290767+00:00
+2023-07-13T10:34:50.199767+00:00
+";
+        let rec = Record::try_from(rec_file)
+            .unwrap()
+            .with_timezone(&ctx.timezone);
+        paint_day_range(&ctx, &rec, date_md(7, 10)..=date_md(7, 12), 24).unwrap();
     }
 }

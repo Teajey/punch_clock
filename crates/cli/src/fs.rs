@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::error::{Main, Result};
+use punch_clock_core::error::{Main, Result};
 
 pub fn file_location_in_path_by_prefix(prefix: &str) -> Result<PathBuf> {
     fn recurse(prefix: &str, current_dir: &Path) -> Result<PathBuf> {

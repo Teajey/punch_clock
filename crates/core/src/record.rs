@@ -4,17 +4,19 @@ use std::{
     collections::VecDeque,
     fmt::{Display, Write},
     fs,
-    ops::RangeInclusive,
+    io::BufRead,
 };
 
+use anyhow::Context as _;
 use chrono::{DateTime, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
-use context::Context;
+use serde::Deserialize;
 
 use crate::{
-    app::context,
+    context,
     error::{self, Result},
-    time::{range::DateTimeRange, ContextTimeZone, NaiveDateOperations},
+    time::{ContextTimeZone, NaiveDateOperations, range::DateTimeRange},
 };
+use context::Context;
 
 // FIXME: I'm thinking Entry ought to just be completely replaced by DateTimeRange
 #[derive(Clone)]
@@ -171,8 +173,8 @@ pub enum Latest<'a, Tz: TimeZone> {
 #[derive(Clone)]
 #[cfg_attr(test, derive(Debug))]
 pub struct Record<Tz: TimeZone> {
-    entries: Vec<Entry<Tz>>,
-    current_session: Option<(DateTime<Tz>, Option<String>)>,
+    pub entries: Vec<Entry<Tz>>,
+    pub current_session: Option<(DateTime<Tz>, Option<String>)>,
 }
 
 impl<Tz: TimeZone> Record<Tz> {
@@ -331,16 +333,6 @@ impl<Tz: TimeZone> IntoIterator for Record<Tz> {
 }
 
 impl<Tz: ContextTimeZone> Record<Tz> {
-    pub fn paint_calendar(
-        &self,
-        ctx: &context::Context<Tz>,
-        range: RangeInclusive<NaiveDate>,
-        width: usize,
-    ) -> Result<()> {
-        display::paint_day_range(ctx, self, range, width)?;
-        Ok(())
-    }
-
     pub fn days_time(self, ctx: &context::Context<Tz>, day: NaiveDate) -> Result<Duration> {
         let datetime_ranges = self.try_into_cropped_datetime_ranges(
             ctx,
@@ -462,11 +454,19 @@ impl<Tz: ContextTimeZone> Record<Tz> {
     }
 }
 
+#[derive(Deserialize)]
+struct RecordStdin {
+    pub clock_in: DateTime<Utc>,
+    pub clock_out: Option<DateTime<Utc>>,
+    pub in_comment: Option<String>,
+    pub out_comment: Option<String>,
+}
+
 impl Record<Utc> {
     pub fn clock_in(&mut self, comment: Option<String>) -> Result<DateTime<Utc>> {
         if self.current_session.is_some() {
             return Err(error::Main::AlreadyClockedIn);
-        };
+        }
 
         let now = Utc::now();
 
@@ -507,6 +507,41 @@ impl Record<Utc> {
         let record = record.with_timezone(&Utc);
 
         Ok(Some(record))
+    }
+
+    pub fn load_stdin() -> anyhow::Result<Self> {
+        let stdin = std::io::BufReader::new(std::io::stdin());
+
+        let mut entries = Vec::<Entry<Utc>>::new();
+
+        for line in stdin.lines() {
+            let line = line.context("reading a line")?;
+            let RecordStdin {
+                clock_in,
+                clock_out,
+                in_comment,
+                out_comment,
+            } = serde_json::from_str(&line)?;
+            match clock_out {
+                Some(check_out) => {
+                    entries.push(
+                        Entry::try_new(clock_in, check_out, in_comment, out_comment)
+                            .context("invalid entry")?,
+                    );
+                }
+                None => {
+                    return Ok(Record {
+                        entries,
+                        current_session: Some((clock_in, in_comment)),
+                    });
+                }
+            }
+        }
+
+        Ok(Record {
+            entries,
+            current_session: None,
+        })
     }
 
     pub fn init() -> Result<()> {
@@ -571,15 +606,8 @@ mod test {
     use chrono::{DateTime, FixedOffset, TimeZone};
     use pretty_assertions::assert_eq;
 
-    use super::{display::paint_day_range, Record};
-    use crate::{
-        app::context,
-        record::{self, Entry},
-    };
-
-    fn date_md(month: u32, day: u32) -> chrono::NaiveDate {
-        chrono::NaiveDate::from_ymd_opt(2023, month, day).unwrap()
-    }
+    use super::Record;
+    use crate::record::{self, Entry};
 
     fn datetime_hm(hour: u32, min: u32) -> DateTime<FixedOffset> {
         FixedOffset::west_opt(0)
@@ -651,82 +679,6 @@ mod test {
             ],
             rec_vec
         );
-    }
-
-    #[test]
-    fn range_end_index_x_out_of_range_for_slice_of_length_y() {
-        let ctx = context::Context {
-            editor_path: String::new(),
-            timezone: FixedOffset::east_opt(0).unwrap(),
-            skip_hooks: Default::default(),
-        };
-        let rec_file = "2023-07-10T05:05:42.372091+00:00 2023-07-10T09:38:44.320091+00:00
-2023-07-10T20:00:00+00:00        2023-07-10T22:13:34.369+00:00";
-        let rec = Record::try_from(rec_file)
-            .unwrap()
-            .with_timezone(&ctx.timezone);
-        paint_day_range(&ctx, &rec, date_md(7, 9)..=date_md(7, 10), 48).unwrap();
-    }
-
-    #[test]
-    fn range_end_index_x_out_of_range_for_slice_of_length_y_2() {
-        let ctx = context::Context {
-            editor_path: String::new(),
-            timezone: FixedOffset::east_opt(0).unwrap(),
-            skip_hooks: Default::default(),
-        };
-        let rec_file = "2023-06-04T21:08:34.790590+00:00 2023-06-04T22:32:47.660590+00:00
-2023-06-05T04:30:04.199633+00:00 2023-06-05T07:18:50.734633+00:00";
-        let rec = Record::try_from(rec_file)
-            .unwrap()
-            .with_timezone(&ctx.timezone);
-        paint_day_range(&ctx, &rec, date_md(6, 4)..=date_md(6, 5), 48).unwrap();
-    }
-
-    #[test]
-    fn range_end_index_x_out_of_range_for_slice_of_length_y_3() {
-        let ctx = context::Context {
-            editor_path: String::new(),
-            timezone: FixedOffset::east_opt(12 * 3600).unwrap(),
-            skip_hooks: Default::default(),
-        };
-        let rec_file = "2023-06-30T04:30:00.893153+00:00
-2023-06-30T07:15:07.931153+00:00
-
-2023-07-10T05:05:42.372091+00:00
-2023-07-10T09:38:44.320091+00:00
-
-2023-07-10T20:00:00+00:00       
-2023-07-10T22:13:34.369+00:00   
-
-2023-07-11T04:30:55.569838+00:00
-2023-07-11T05:05:55.569838+00:00
-
-2023-07-11T09:01:20.726248+00:00
-2023-07-11T12:08:36.149248+00:00
-
-2023-07-11T12:32:28.616529+00:00
-2023-07-11T14:27:00.836529+00:00
-
-2023-07-11T20:03:53.114039+00:00
-2023-07-11T22:41:25.885039+00:00
-
-2023-07-12T04:30:00+00:00       
-2023-07-12T04:54:25.885+00:00   
-
-2023-07-12T09:30:00+00:00       
-2023-07-12T13:00:00+00:00       
-
-2023-07-12T22:04:34.947469+00:00
-2023-07-12T23:29:44.706469+00:00
-
-2023-07-13T09:08:38.290767+00:00
-2023-07-13T10:34:50.199767+00:00
-";
-        let rec = Record::try_from(rec_file)
-            .unwrap()
-            .with_timezone(&ctx.timezone);
-        paint_day_range(&ctx, &rec, date_md(7, 10)..=date_md(7, 12), 24).unwrap();
     }
 
     #[test]

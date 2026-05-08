@@ -1,15 +1,13 @@
 mod action;
 mod app;
-mod error;
 mod fs;
-mod range;
-mod record;
-mod script_hook;
+mod plugins;
 mod string;
-mod time;
 
-use chrono::{FixedOffset, Local, Utc};
-use clap::Parser;
+use chrono::Utc;
+use punch_clock_core::context::Context;
+use punch_clock_core::error;
+use punch_clock_core::record;
 
 static GIT_REVISION: &str = env!("PUNCH_CLOCK_GIT_REVISION");
 static LONG_VERSION: &str = env!("PUNCH_CLOCK_LONG_VERSION");
@@ -22,9 +20,9 @@ fn main() {
 }
 
 fn run() -> error::Result<()> {
-    let cli = app::cli::Base::parse();
-
     std::env::set_current_dir(fs::file_location_in_path_by_prefix(".punch_clock")?)?;
+
+    let cli = app::cli::v2::Base::parse();
 
     if cli.init {
         record::Record::init()?;
@@ -34,16 +32,13 @@ fn run() -> error::Result<()> {
         return Err(error::Main::Uninitialized);
     };
 
-    let action = cli.action.unwrap_or(app::cli::Action::Status);
+    let action = cli.action.unwrap_or(app::cli::v2::Action::Status);
 
     if let Some(offset) = cli.offset {
-        let ctx = app::Context::init(
-            FixedOffset::east_opt(offset * 3600).ok_or(error::Main::TimezoneOutOfRange(offset))?,
-            cli.skip_hooks,
-        )?;
+        let ctx = Context::init_with_offset(cli.skip_hooks, offset)?;
         action::run(&ctx, &action, record)?;
     } else {
-        let ctx = app::Context::init(Local, cli.skip_hooks)?;
+        let ctx = Context::init(cli.skip_hooks)?;
         action::run(&ctx, &action, record)?;
     }
 

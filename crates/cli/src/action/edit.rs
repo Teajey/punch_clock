@@ -2,8 +2,8 @@ use std::fs;
 
 use chrono::{Local, Utc};
 
-use crate::{
-    app::context::Context,
+use punch_clock_core::{
+    context::Context,
     error::{self, Result},
     record::Record,
     time::ContextTimeZone,

@@ -1,4 +1,4 @@
-use crate::{error::Result, record::Record, time::ContextTimeZone};
+use punch_clock_core::{error::Result, record::Record, time::ContextTimeZone};
 
 const DATE_FORMAT: &str = "%e %b %Y %I:%M%P %Z";
 

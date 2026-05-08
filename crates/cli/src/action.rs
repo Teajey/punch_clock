@@ -2,6 +2,7 @@ mod dump;
 mod edit;
 mod enter;
 mod exit;
+mod plugin;
 mod stats;
 mod status;
 mod undo;
@@ -9,17 +10,15 @@ mod undo;
 use std::fs;
 
 use chrono::{Duration, NaiveTime, Utc};
-
-use crate::{
-    app::{
-        cli::{Action, Day},
-        context::Context,
-    },
-    error::{self, Result},
+use punch_clock_core::{
+    context::Context,
+    error::Result,
     record::{self, Record},
     script_hook,
     time::ContextTimeZone,
 };
+
+use crate::app::cli::{v2::Action, Day};
 
 pub fn run<Tz: ContextTimeZone>(
     ctx: &Context<Tz>,
@@ -65,29 +64,6 @@ pub fn run<Tz: ContextTimeZone>(
             let date = day.as_ref().map(|Day(date)| *date);
             stats::run(ctx, record.with_timezone(&ctx.timezone), date)?;
         }
-        Action::Calendar { from, to, width } => {
-            let (from, to) = match (from.as_ref(), to.as_ref()) {
-                (None, Some(_)) => unreachable!(),
-                (None, None) => {
-                    let to = chrono::Local::now().date_naive();
-                    let from = to
-                        .checked_sub_days(chrono::Days::new(6))
-                        .ok_or(error::Main::DateOutOfRange)?;
-                    (from, to)
-                }
-                (Some(to), None) => {
-                    let to = to.0;
-                    let from = to
-                        .checked_sub_days(chrono::Days::new(6))
-                        .ok_or(error::Main::DateOutOfRange)?;
-                    (from, to)
-                }
-                (Some(from), Some(to)) => (from.0, to.0),
-            };
-            record
-                .with_timezone(&ctx.timezone)
-                .paint_calendar(ctx, from..=to, *width)?;
-        }
         Action::Undo => {
             undo::run(&mut record)?;
             fs::write(".punch_clock/record", record.serialize()?)?;
@@ -128,7 +104,10 @@ pub fn run<Tz: ContextTimeZone>(
             )?;
             println!("{}", tr.print(6, "%R")?);
         }
-    };
+        Action::Plugin { name, args } => {
+            plugin::run(ctx, name, args, &record)?;
+        }
+    }
 
     Ok(())
 }

@@ -1,8 +1,7 @@
 use chrono::Utc;
+use punch_clock_core::{error::Result, record::Record, time::human_readable_duration};
 
-use crate::{
-    error::Result, record::Record, string::assert_no_newlines, time::human_readable_duration,
-};
+use crate::string::assert_no_newlines;
 
 pub fn run(record: &mut Record<Utc>, comment: Option<String>) -> Result<()> {
     let comment = comment.map(assert_no_newlines).transpose()?;

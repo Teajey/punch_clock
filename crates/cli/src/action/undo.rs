@@ -1,7 +1,7 @@
 use chrono::{Local, Utc};
 use dialoguer::Confirm;
 
-use crate::{
+use punch_clock_core::{
     error::Result,
     record::{Latest, Record},
 };

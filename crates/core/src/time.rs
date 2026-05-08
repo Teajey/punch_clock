@@ -8,7 +8,7 @@ use std::{
 use chrono::{DateTime, Days, Duration, TimeZone};
 
 use crate::{
-    app::context::Context,
+    context::Context,
     error::{self, Result},
 };
 
@@ -68,6 +68,8 @@ pub trait ContextTimeZone: TimeZone<Offset = <Self as ContextTimeZone>::Offset> 
     type Offset: Copy + Display;
 
     fn now(&self) -> DateTime<Self>;
+
+    fn environment_value(&self) -> String;
 }
 
 impl ContextTimeZone for chrono::Local {
@@ -76,6 +78,10 @@ impl ContextTimeZone for chrono::Local {
     fn now(&self) -> DateTime<Self> {
         chrono::Local::now()
     }
+
+    fn environment_value(&self) -> String {
+        String::new()
+    }
 }
 
 impl ContextTimeZone for chrono::FixedOffset {
@@ -83,6 +89,10 @@ impl ContextTimeZone for chrono::FixedOffset {
 
     fn now(&self) -> DateTime<Self> {
         chrono::Utc::now().with_timezone(self)
+    }
+
+    fn environment_value(&self) -> String {
+        self.to_string()
     }
 }
 

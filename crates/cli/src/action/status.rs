@@ -1,6 +1,6 @@
 use chrono::Utc;
 
-use crate::{
+use punch_clock_core::{
     error::Result,
     record::{Latest, Record},
     time::Ago,
@@ -23,7 +23,7 @@ pub fn run(record: &Record<Utc>) -> Result<()> {
             println!("Currently clocked out ({ago})");
         }
         Latest::None => println!("No clock in/out records have been created."),
-    };
+    }
 
     Ok(())
 }

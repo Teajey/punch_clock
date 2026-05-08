@@ -72,4 +72,7 @@ pub enum Main {
 
     #[error("Failed to execute script hook: {0}")]
     ScriptHook(#[from] script_hook::Error),
+
+    #[error("{0:#}")]
+    Anyhow(#[from] anyhow::Error),
 }

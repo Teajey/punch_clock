@@ -1,6 +1,7 @@
-mod day;
+pub mod v2;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use punch_clock_core::day;
 
 pub use day::Day;
 

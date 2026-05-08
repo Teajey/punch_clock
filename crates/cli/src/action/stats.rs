@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 
-use crate::{
-    app::context,
+use punch_clock_core::{
+    context,
     error::Result,
     record::Record,
     time::{human_readable_duration, ContextTimeZone},

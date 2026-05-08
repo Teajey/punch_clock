@@ -69,11 +69,11 @@ impl<Tz: TimeZone> From<Entry<Tz>> for DateTimeRange<Tz> {
     }
 }
 
-impl<Tz: TimeZone> Sum<DateTimeRange<Tz>> for Duration
+impl<'a, Tz: TimeZone> Sum<&'a DateTimeRange<Tz>> for Duration
 where
     Tz::Offset: Copy,
 {
-    fn sum<I: Iterator<Item = DateTimeRange<Tz>>>(iter: I) -> Self {
+    fn sum<I: Iterator<Item = &'a DateTimeRange<Tz>>>(iter: I) -> Self {
         iter.fold(Duration::zero(), |duration, dtr| duration + dtr.span())
     }
 }

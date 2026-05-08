@@ -7,7 +7,7 @@ mod stats;
 mod status;
 mod undo;
 
-use std::fs;
+use std::{fs, io::Write as _};
 
 use chrono::{Duration, NaiveTime, Utc};
 use punch_clock_core::{
@@ -89,12 +89,31 @@ pub fn run<Tz: ContextTimeZone>(
             let total_datetime_ranges = record
                 .clone()
                 .try_into_cropped_datetime_ranges(ctx, date, next_date)?;
-            let total_duration: chrono::Duration = total_datetime_ranges.into_iter().sum();
+            let total_duration: chrono::Duration = total_datetime_ranges.iter().sum();
             println!(
                 "Total time: {} hours, {} minutes",
                 total_duration.num_hours(),
                 total_duration.num_minutes() % 60
             );
+
+            let mut hook = script_hook::Hook::name("day-stats")
+                .env("PUNCH_CLOCK_DAY_TOTAL_DURATION", total_duration.to_string())
+                .get_process();
+
+            if let Some(mut stdin) = hook.take_stdin() {
+                for e in total_datetime_ranges {
+                    let start = e.start().to_rfc3339();
+                    let end = e.end().to_rfc3339();
+                    let val = serde_json::json!({
+                        "start": start,
+                        "end": end,
+                    });
+                    let _ = serde_json::to_writer(&mut stdin, &val);
+                    let _ = stdin.write_all(b"\n");
+                }
+            }
+
+            hook.run();
 
             let tr = record::display::time_range::time_range(
                 &record,

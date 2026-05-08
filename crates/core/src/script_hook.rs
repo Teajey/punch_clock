@@ -58,7 +58,7 @@ pub struct Process {
 }
 
 impl Hook {
-    pub fn try_new(name: &'static str) -> anyhow::Result<Self> {
+    pub fn name(name: &'static str) -> Self {
         let mut hook = Hook {
             name,
             command: None,
@@ -70,10 +70,17 @@ impl Hook {
             .unwrap_or_default();
 
         if skip {
-            return Ok(hook);
+            return hook;
         }
 
-        let current_dir = std::env::current_dir().context("getting current directory")?;
+        let current_dir = match std::env::current_dir() {
+            Ok(cwd) => cwd,
+            Err(err) => {
+                eprintln!("Error: couldn't run hook '' because cwd couldn't be resolved: {err}");
+                return hook;
+            }
+        };
+
         let hook_file_path = current_dir.join(".punch_clock/hooks").join(name);
         if hook_file_path.exists() {
             let mut cmd = Command::new(&hook_file_path);
@@ -81,7 +88,7 @@ impl Hook {
             hook.command = Some(cmd);
         }
 
-        Ok(hook)
+        hook
     }
 
     pub fn env<K, V>(&mut self, key: K, value: V) -> &mut Self
@@ -116,23 +123,33 @@ impl Hook {
         }
     }
 
-    pub fn get_process(&mut self) -> anyhow::Result<Process> {
+    pub fn get_process(&mut self) -> Process {
         let Some(command) = &mut self.command else {
-            return Ok(Process {
+            return Process {
                 name: self.name,
                 child: None,
-            });
+            };
         };
 
-        let child = command
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-            .context("spawning child process")?;
+        let child = command.stdin(std::process::Stdio::piped()).spawn();
+        let child = match child {
+            Ok(child) => child,
+            Err(err) => {
+                eprintln!(
+                    "Error: failed to spawn child process for hook '{}': {err}",
+                    self.name
+                );
+                return Process {
+                    name: self.name,
+                    child: None,
+                };
+            }
+        };
 
-        Ok(Process {
+        Process {
             name: self.name,
             child: Some(child),
-        })
+        }
     }
 }
 
@@ -144,19 +161,27 @@ impl Process {
         child.stdin.take()
     }
 
-    pub fn run(&mut self) -> anyhow::Result<()> {
+    pub fn run(&mut self) {
         let Some(child) = &mut self.child else {
-            return Ok(());
+            return;
         };
 
-        let status = child.wait().context("waiting on child process")?;
+        let status = child.wait();
+        let status = match status {
+            Ok(s) => s,
+            Err(err) => {
+                eprintln!(
+                    "Error: failed while waiting on child process for hook '{}': {err}",
+                    self.name
+                );
+                return;
+            }
+        };
 
         if !status.success() {
             let exit_code = status.code().unwrap_or(-1);
             println!("'{}' hook exited with code {exit_code}", self.name);
             std::process::exit(exit_code);
         }
-
-        Ok(())
     }
 }

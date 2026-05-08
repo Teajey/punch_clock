@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::collections::HashMap;
 
 use clap::{builder::PossibleValue, Arg, ArgMatches, Command};
@@ -134,14 +135,20 @@ fn build_command() -> Command {
                 .arg(
                     Arg::new("day")
                         .help("For a particular day (YYYY-MM-DD)")
-                        .required(false),
+                        .required(false)
+                        .value_parser(clap::value_parser!(Day)),
                 ),
         )
         .subcommand(Command::new("undo").about("Remove the latest entry in the record"))
         .subcommand(
             Command::new("day")
                 .about("Print visualization of a day's work hours (today by default)")
-                .arg(Arg::new("date").help("YYYY-MM-DD").required(false))
+                .arg(
+                    Arg::new("date")
+                        .help("YYYY-MM-DD")
+                        .required(false)
+                        .value_parser(clap::value_parser!(Day)),
+                )
                 .arg(
                     Arg::new("resolution")
                         .short('r')

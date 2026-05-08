@@ -340,7 +340,7 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             day.into_day_end(ctx)?,
         )?;
 
-        Ok(datetime_ranges.into_iter().sum())
+        Ok(datetime_ranges.iter().sum())
     }
 
     pub fn todays_time(self, ctx: &context::Context<Tz>) -> Result<Duration> {
@@ -371,7 +371,7 @@ impl<Tz: ContextTimeZone> Record<Tz> {
 
         datetime_ranges_today.push(DateTimeRange::new(first_check_in, first_check_out)?);
 
-        Ok(datetime_ranges_today.into_iter().sum())
+        Ok(datetime_ranges_today.iter().sum())
     }
 
     pub fn total_time(self, ctx: &context::Context<Tz>) -> Result<Duration> {
@@ -384,7 +384,7 @@ impl<Tz: ContextTimeZone> Record<Tz> {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(datetime_ranges.into_iter().sum())
+        Ok(datetime_ranges.iter().sum())
     }
 
     pub fn current_session_time(&self, ctx: &Context<Tz>) -> Option<Duration> {

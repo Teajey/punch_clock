@@ -82,7 +82,7 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
         .collect::<std::collections::BTreeSet<_>>()
         .len();
 
-    let total_duration: chrono::Duration = total_datetime_ranges.into_iter().sum();
+    let total_duration: chrono::Duration = total_datetime_ranges.iter().sum();
     println!(
         "Total time: {} hours, {} minutes",
         total_duration.num_hours(),
@@ -112,8 +112,7 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
         }
     };
 
-    script_hook::Hook::try_new("calendar-stats")
-        .context("initialising 'calendar-stats' hook")?
+    script_hook::Hook::name("calendar-stats")
         .env(
             "PUNCH_CLOCK_CALENDAR_TOTAL_DURATION",
             total_duration.to_string(),

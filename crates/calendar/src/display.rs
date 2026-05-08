@@ -1,5 +1,6 @@
 use std::ops::RangeInclusive;
 
+use anyhow::Context as _;
 use chrono::{DateTime, Duration, NaiveDate};
 use context::Context;
 
@@ -7,6 +8,7 @@ use punch_clock_core::{
     context,
     error::Result,
     record::Record,
+    script_hook,
     time::{self, ContextTimeZone, NaiveDateOperations, range::DateTimeRange},
 };
 
@@ -87,10 +89,11 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
         total_duration.num_minutes() % 60
     );
 
-    match i32::try_from(days_covered) {
+    let average_duration = match i32::try_from(days_covered) {
         Ok(0) => {
             println!("# of work days: 0");
             println!("Average work day time: 0 hours, 0 minutes");
+            None
         }
         Ok(days_covered) => {
             println!("# of work days: {days_covered}");
@@ -100,12 +103,30 @@ pub fn paint_day_range<Tz: ContextTimeZone>(
                 average_duration.num_hours(),
                 average_duration.num_minutes() % 60
             );
+            Some(average_duration)
         }
         Err(err) => {
             println!("# of work days: FAILED TO PARSE FROM usize: {err}");
             println!("Average work day time: UNAVAILABLE");
+            None
         }
-    }
+    };
+
+    script_hook::Hook::try_new("calendar-stats")
+        .context("initialising 'calendar-stats' hook")?
+        .env(
+            "PUNCH_CLOCK_CALENDAR_TOTAL_DURATION",
+            total_duration.to_string(),
+        )
+        .env(
+            "PUNCH_CLOCK_CALENDAR_DAYS_COVERED",
+            days_covered.to_string(),
+        )
+        .env(
+            "PUNCH_CLOCK_CALENDAR_AVERAGE_DURATION",
+            average_duration.map_or_else(String::new, |x| x.to_string()),
+        )
+        .run();
 
     for (i, day) in range_start
         .iter_days()

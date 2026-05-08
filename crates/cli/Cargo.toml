@@ -13,7 +13,7 @@ anyhow = "1.0.102"
 chrono = "0.4.41"
 clap = { version = "4.3.0", features = ["derive", "cargo"] }
 dialoguer = { version = "0.10.4", default-features = false }
-punch_clock_core = { version = "0.7.1", path = "../core" }
+punch_clock_core = { path = "../core" }
 serde_json = "1.0.149"
 thiserror = "1.0.40"
 
